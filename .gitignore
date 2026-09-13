@@ -1,0 +1,5 @@
+.DS_Store
+
+# Real brand/client data stays local — only the schema template is public
+brands/*
+!brands/_template/

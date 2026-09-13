@@ -1,6 +1,6 @@
 # Visual Design System — [Brand Name]
 
-*Same shape as the `design-system-teardown` skill's output. If this brand has a live site, run that skill and drop its output here instead of hand-writing this file. If there's no live site (a new or purely social-native brand), `brand-onboarding` will ask a short set of manual questions to fill this in at lighter detail.*
+*Same shape as the bundled `design-system-teardown` skill's output (`.claude/skills/design-system-teardown/`). If this brand has a live site, `brand-onboarding` runs that skill and drops its output here instead of hand-writing this file. If there's no live site (a new or purely social-native brand), `brand-onboarding` asks a short set of manual questions to fill this in at lighter detail.*
 
 ## Color palette
 [Hex values, named and role-tagged — primary, secondary, accent, neutral/background. Not just a swatch list — say what each color is *for*.]

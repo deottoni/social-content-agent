@@ -11,8 +11,8 @@ Ask for the brand/client name and derive a filesystem-safe slug (lowercase, hyph
 
 ## Step 1 — visual design system
 
-Ask: "Does this brand have a live website, or an existing design-system-teardown output already?"
-- If yes and the `design-system-teardown` skill is available in this session: offer to run it against the site and use its output directly for `visual-design-system.md`, reformatted to match the template's headers if needed.
+Ask: "Does this brand have a live website?"
+- If yes: run the bundled `design-system-teardown` skill (`.claude/skills/design-system-teardown/`) against the site and use its output directly for `visual-design-system.md`, reformatted to match the template's headers if needed.
 - If no (new or purely social-native brand): ask a short set of manual questions covering the template's sections at lighter detail — primary colors (names are fine, exact hex is a bonus not a requirement), font vibe if any, whether there's a recurring mascot/character (get a description detailed enough to reuse in image prompts), and general imagery style (photography vs illustration vs 3D vs flat, and the mood).
 
 Write `brands/<slug>/visual-design-system.md` from the template, filled in with the answers.

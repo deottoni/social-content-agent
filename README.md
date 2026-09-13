@@ -8,7 +8,7 @@ Built generic and replicable from the start: onboarding a new brand or client is
 
 1. **Onboard a brand** (once per brand/client):
    `/brand-onboarding` — interviews you and writes `brands/<slug>/visual-design-system.md` + `brands/<slug>/social-content-system.md`.
-   If the brand has a live site and you have the `design-system-teardown` skill available, onboarding will offer to use it for the visual file instead of asking colors/fonts manually.
+   If the brand has a live site, onboarding uses the bundled `design-system-teardown` skill for the visual file instead of asking colors/fonts manually.
 
 2. **Get post ideas**:
    `/social-trend-scan <slug>` — researches or ideates (depending on the brand's `mode`), clusters into themes, shows you an idea board. Approve, reject, or redirect.
@@ -28,7 +28,7 @@ brands/<slug>/                     one real folder per onboarded brand
 
 ## Status
 
-Andre's own accounts are the first test brand — not the design target. If anything in a skill or agent file only makes sense for one brand, that's a bug in this project, not a brand-specific customization.
+The maintainer's own accounts are the first test brand — not the design target. If anything in a skill or agent file only makes sense for one brand, that's a bug in this project, not a brand-specific customization.
 
 No image-generation or posting integration is wired in yet. Stage 4's default output is always copy-paste-ready text; see `CLAUDE.md` and `.claude/agents/image-prompt-engineer.md` for the current thinking on when a direct render (Canva autofill, an image-gen API) would be worth adding per brand.
 

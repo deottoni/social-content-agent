@@ -1,6 +1,6 @@
 # Social Content Agent — Harness Rules
 
-This project is a **generic, replicable pipeline**, not a one-off tool for a single brand. It is built to onboard any brand or client the same way — including Andre's own accounts, which are just the first test case, not the design target. Never hardcode a specific brand's voice, palette, audience, or topics into a skill or agent file. Brand-specific content lives only under `brands/<slug>/` — skills and agents read it, they never contain it.
+This project is a **generic, replicable pipeline**, not a one-off tool for a single brand. It is built to onboard any brand or client the same way — including the maintainer's own accounts, which are just the first test case, not the design target. Never hardcode a specific brand's voice, palette, audience, or topics into a skill or agent file. Brand-specific content lives only under `brands/<slug>/` — skills and agents read it, they never contain it.
 
 ## What this system does — and does not do
 

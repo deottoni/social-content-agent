@@ -45,6 +45,17 @@ intentionally a separate, minimal, private repo — it never contains brand data
 only free-text-labeled raw captures — so the phone-side session never needs access to
 any brand's actual folder.
 
+**Session-start check (first turn only — never re-check mid-conversation):** if
+`.claude/inbox.local.json` exists, do a lightweight check — `git pull` the inbox repo
+and look for any capture folder outside `processed/`. This is cheap (a pull + a
+listing) and safe to do every session. If there's nothing new, say nothing — don't
+report a clean check. If there's something new, mention it in one line near the top of
+your first response (after greeting, before whatever the user actually asked for) and
+ask if they want it processed now — never run `inbox-drain`'s actual build step
+(subagents, image rendering) without that explicit go-ahead; that part is real work,
+not a free check. If `.claude/inbox.local.json` doesn't exist yet, don't prompt to set
+it up — that's opt-in via `inbox-drain`'s own Step 0.
+
 ## Adding a new brand
 
 Always run the `brand-onboarding` skill rather than hand-writing brand files or creating a folder by hand. It asks where to create the brand's sibling folder (default: a sibling of this repo), whether that folder should be under git at all (default: no — never suggest a public repo for brand data), and registers the resulting path in `.claude/brands.local.json`. If you must hand-edit a brand file, keep the same section headers as `brands/_template/` so every agent's assumptions about where to find a field still hold.

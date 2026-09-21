@@ -33,6 +33,18 @@ Both paths feed the same `theme-synthesizer` agent and the same downstream Stage
 
 Each agent in `.claude/agents/` does one job and reads only the brand file(s) it needs (see each agent's own file for which). Run Stage 4's three content agents (`caption-writer`, `hashtag-strategist`, `image-prompt-engineer`) before `brand-consistency-reviewer`, which is the final pass and should see all three outputs together.
 
+## Optional: phone capture without the computer being on
+
+`inbox-drain` (paired with the separate private `content-inbox` repo's
+`capture-reference` skill) lets a reference post be captured from a phone — via a
+Claude Code cloud session against `content-inbox`, independent of whether this
+computer is on — and staged for later. Running `inbox-drain` here pulls that repo,
+resolves each staged capture to a real brand via `.claude/brands.local.json`, and
+builds it into a post the same way `social-content-remix` does. `content-inbox` is
+intentionally a separate, minimal, private repo — it never contains brand data itself,
+only free-text-labeled raw captures — so the phone-side session never needs access to
+any brand's actual folder.
+
 ## Adding a new brand
 
 Always run the `brand-onboarding` skill rather than hand-writing brand files or creating a folder by hand. It asks where to create the brand's sibling folder (default: a sibling of this repo), whether that folder should be under git at all (default: no — never suggest a public repo for brand data), and registers the resulting path in `.claude/brands.local.json`. If you must hand-edit a brand file, keep the same section headers as `brands/_template/` so every agent's assumptions about where to find a field still hold.

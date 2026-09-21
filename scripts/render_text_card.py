@@ -85,17 +85,29 @@ def fit_headline(draw, text, font_path, max_width, max_height, max_size=96, min_
 
 
 def paste_logo(image, logo_path, position, margin_ratio=0.04, width_ratio=0.1):
+    """Place the logo, keeping it inside whatever square Instagram actually shows
+    in feed/grid thumbnails. IG center-crops any non-square post to a square for
+    those previews, clipping (long_side - short_side) / 2 off each end of the long
+    axis — a logo pinned to the raw canvas edge (e.g. bottom-right on a 1080x1350
+    portrait card) lands in that clipped strip and disappears outside the full-post
+    view. crop_x/crop_y below is exactly that clipped amount per axis (0 for a
+    square canvas), added to the margin so the logo always stays inside the
+    visible square regardless of aspect ratio.
+    """
     logo = Image.open(logo_path).convert("RGBA")
     target_w = int(image.width * width_ratio)
     scale = target_w / logo.width
     logo = logo.resize((target_w, int(logo.height * scale)), Image.LANCZOS)
 
-    margin = int(image.width * margin_ratio)
+    crop_x = max(0, (image.width - image.height) // 2)
+    crop_y = max(0, (image.height - image.width) // 2)
+    margin_x = int(image.width * margin_ratio) + crop_x
+    margin_y = int(image.width * margin_ratio) + crop_y
     positions = {
-        "bottom-right": (image.width - logo.width - margin, image.height - logo.height - margin),
-        "bottom-left": (margin, image.height - logo.height - margin),
-        "top-right": (image.width - logo.width - margin, margin),
-        "top-left": (margin, margin),
+        "bottom-right": (image.width - logo.width - margin_x, image.height - logo.height - margin_y),
+        "bottom-left": (margin_x, image.height - logo.height - margin_y),
+        "top-right": (image.width - logo.width - margin_x, margin_y),
+        "top-left": (margin_x, margin_y),
     }
     xy = positions.get(position, positions["bottom-right"])
     image.paste(logo, xy, logo)

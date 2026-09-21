@@ -1,5 +1,11 @@
 .DS_Store
 
-# Real brand/client data stays local — only the schema template is public
+# Real brand/client data lives in a sibling folder outside this repo (see
+# .claude/brands.local.json and CLAUDE.md) — this rule is just a backstop in case
+# anyone ever hand-creates a brand folder inside the repo by mistake.
 brands/*
 !brands/_template/
+
+# Machine-local registry mapping brand slug -> absolute path of its sibling folder.
+# Never public — paths are specific to this machine.
+.claude/brands.local.json

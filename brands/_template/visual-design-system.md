@@ -17,5 +17,18 @@
 ## Iconography
 [Icon style — line weight, filled vs outline, corner radius, any icon set in use.]
 
+## Rendering
+**Method:** direct | prompt-only
+
+[`direct` — this brand's imagery is a flat background with text over it (no photography/
+illustration as the primary subject), so `scripts/render_text_card.py` can render real
+PNGs from this file's confirmed background/text/accent hex values, font family, and
+logo asset paths. `image-prompt-engineer`'s on-image-text/layout output feeds the
+renderer directly. `prompt-only` (the default if unsure) — imagery relies on
+photography/illustration/3D/a style no simple renderer can produce, so
+`image-prompt-engineer` writes a prompt for an external tool instead, per usual. Only
+set `direct` once the palette/typography/logo above are all confirmed, not still
+placeholder/TBD.]
+
 ## Notes
 [Anything else load-bearing for keeping generated assets visually on-brand.]

@@ -7,9 +7,9 @@ Produce an idea board for one brand and stop for human approval. Do not proceed 
 
 ## Step 0 — load the brand
 
-Read `brands/<slug>/social-content-system.md`. If it doesn't exist, tell the user this brand hasn't been onboarded yet and offer to run `brand-onboarding` first — don't try to proceed without it.
+Resolve `<slug>`'s folder from `.claude/brands.local.json` at this repo's root (find the repo root with `git rev-parse --show-toplevel` if not already there). If the file doesn't exist or doesn't list `<slug>`, tell the user this brand hasn't been onboarded here yet and offer to run `brand-onboarding` first — don't try to proceed without it.
 
-Note the `mode` field and the default lookback window.
+Read `<brand-path>/social-content-system.md`. Note the `mode` field and the default lookback window.
 
 ## Step 1 — source material
 
@@ -23,6 +23,6 @@ Pass the raw findings/topics (and the brand file) to the `theme-synthesizer` age
 
 ## Step 3 — save and present
 
-Write the idea board to `brands/<slug>/idea-boards/<YYYY-MM-DD>.md`. Present it to the user in the chat as the numbered list theme-synthesizer produced, and ask which cluster(s) to pursue (they may approve several, none, or ask for a redirect/re-run with different guidance).
+Write the idea board to `<brand-path>/idea-boards/<YYYY-MM-DD>.md`. Present it to the user in the chat as the numbered list theme-synthesizer produced, and ask which cluster(s) to pursue (they may approve several, none, or ask for a redirect/re-run with different guidance).
 
 Stop here. `social-content-build` is a separate, explicitly-invoked next step once the user has picked cluster(s).

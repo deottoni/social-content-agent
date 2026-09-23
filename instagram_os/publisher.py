@@ -134,8 +134,15 @@ class Publisher:
     # ----------------------------------------------------------------- publish
     def publish_due(self, limit=None):
         """Publish QUEUED posts, oldest first, while caps and quiet hours allow."""
-        if self.ctx.autonomy("publish_post") == "off":
+        mode = self.ctx.autonomy("publish_post")
+        if mode == "off":
             return []
+        if mode == "auto":
+            # Posts validated while the brand was in approval mode are picked up once autonomy is raised.
+            for pub in self.store.publications([S.VALIDATED]):
+                self.store.transition_publication(pub["id"], S.QUEUED, "auto-queued (autonomy.publish_post=auto)")
+                self.log.record("QUEUE", f"Auto-queued “{pub['content_id']}”", reason="publish_post=auto",
+                                approval_required=False, ref=pub["content_id"])
         self.reconcile_stuck()
         done = []
         for pub in self.store.publications([S.QUEUED]):

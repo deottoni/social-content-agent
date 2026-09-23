@@ -263,3 +263,14 @@ def test_unsynced_media_waits_in_queue_without_burning_attempts(brand, store, fa
     pub.publish_due()
     p = store.publications()[0]
     assert p["status"] == "QUEUED" and p["attempts"] == 0 and "waiting for media" in p["status_reason"]
+
+
+def test_switching_to_auto_picks_up_already_validated_posts(brand, store, fake, publisher):
+    write_config(brand, autonomy={"publish_post": "approval"})
+    publisher.cfg = brand.config
+    make_post(brand)
+    run_pipeline(publisher)
+    assert store.publications()[0]["status"] == "VALIDATED"
+    write_config(brand, autonomy={"publish_post": "auto"})
+    publisher.cfg = brand.config
+    assert [r for _, r in publisher.publish_due()] == ["published"]

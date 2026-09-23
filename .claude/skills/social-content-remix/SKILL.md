@@ -83,7 +83,12 @@ folder tree:
   pillar: <name or "unmapped">
   confidence: <high|low>
   date: <YYYY-MM-DD>
+  hook: <opening line / headline>
+  cta: <call to action, or "none">
+  review: <clean | flagged>
   ```
+  (`hook`, `cta`, and `review` are read by the Instagram operating layer for publishing
+  and analytics — same fields `social-content-build` writes.)
 - `<brand-path>/content-packages/<YYYY-MM>/_index.md` — add this post's row as usual,
   plus an **Origin** column (`pipeline` / `remix`) if the table doesn't have one yet.
   One calendar view for everything ready to post, not a second competing index.

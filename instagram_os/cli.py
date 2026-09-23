@@ -103,7 +103,7 @@ def cmd_publish(rt, args):
     elif args.action == "validate":
         print(pub.validate_pending() or "no drafts")
     else:
-        print(run_job(rt, "publish"))
+        print("publish: %s — %s" % run_job(rt, "publish"))
 
 
 def cmd_comments(rt, args):
@@ -124,7 +124,7 @@ def cmd_comments(rt, args):
         m.reject(args.comment_id, args.note)
         print("rejected")
     else:
-        print(run_job(rt, "comments"))
+        print("comments: %s — %s" % run_job(rt, "comments"))
 
 
 def cmd_opportunities(rt, args):
@@ -157,7 +157,7 @@ def cmd_opportunities(rt, args):
                            approval_required=True, ref=str(args.id))
         print(f"#{args.id} -> {status}")
     else:
-        print(run_job(rt, "opportunities"))
+        print("opportunities: %s — %s" % run_job(rt, "opportunities"))
 
 
 def cmd_log(rt, args):

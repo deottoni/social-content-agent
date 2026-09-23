@@ -11,11 +11,22 @@ Resolve `<slug>`'s folder from `.claude/brands.local.json` at this repo's root (
 
 Read `<brand-path>/social-content-system.md`. Note the `mode` field and the default lookback window.
 
+If the brand runs the Instagram operating layer, also read — when they exist —
+`<brand-path>/instagram/recommendations/latest.md` (performance recommendations from
+`instagram weekly-review`) and `<brand-path>/instagram/plan-brief.md` (audience questions,
+queue depth, content ideas from watched accounts, written by `instagram plan`). These are
+**advisory input only**: pass them along to the Step 1 agents and `theme-synthesizer` as
+extra signal, but the brand file stays authoritative — never drop a pillar or change voice
+because of them, and still stop at the approval gate. If a cluster is there because of a
+recommendation, say so in its rationale.
+
 ## Step 1 — source material
 
 - `mode: trend-driven` → invoke the `trend-researcher` agent with this brand's file and the lookback window (or an override if the user gave one this run).
 - `mode: evergreen` → invoke the `topic-ideator` agent with this brand's file.
 - `mode: hybrid` → invoke both; `topic-ideator` is primary, `trend-researcher`'s findings are supplementary material handed to it.
+
+Whichever path runs, hand the agents the Step 0 recommendations / plan brief if present.
 
 ## Step 2 — cluster
 

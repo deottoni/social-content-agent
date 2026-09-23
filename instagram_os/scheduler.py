@@ -70,7 +70,11 @@ def job_publish(rt):
     ingested = pub.ingest()
     validated = pub.validate_pending()
     published = pub.publish_due()
-    return f"ingested {len(ingested)}, validated {len(validated)}, publish results {published or 'none'}"
+    waiting = len(rt.store.publications(["VALIDATED"]))
+    review = len(rt.store.publications(["REQUIRES_REVIEW"]))
+    results = ", ".join(f"{cid}: {r}" for cid, r in published) or "nothing published"
+    return (f"ingested {len(ingested)}, validated {len(validated)}; {results}; "
+            f"awaiting approval {waiting}, needs review {review}")
 
 
 def job_comments(rt):

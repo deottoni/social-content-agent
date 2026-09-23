@@ -30,7 +30,19 @@ One folder per post, grouped by month — this is the standing convention for ev
 
 - `<brand-path>/content-packages/<YYYY-MM>/<NNN>-<post-slug>/` — one folder per post, numbered sequentially within the month (`001`, `002`, ...), reset to `001` each new month.
 - Inside: `caption.txt` — the caption and hashtags together, exactly as they should be pasted into the platform, nothing else (no headers, no metadata — anything added there gets pasted into the post by mistake). Plus the image(s): `image.png` for a single-image post, `image-black.png` / `image-white.png` (or other named variants) when more than one colorway exists for the same post, `slide-1.png`, `slide-2.png`, ... for a carousel, in posting order.
-- `<brand-path>/content-packages/<YYYY-MM>/_index.md` — one scannable table for the whole month: post number, name, format, colorway, pillar, an **Origin** column (`pipeline` / `remix` — see `social-content-remix` for the latter) if any post in the table came from a remix, and a **Status** column (`ready` / `posted`) the human updates by hand as they actually post things. This is the calendar view — read this before opening any post folder, don't rebuild it by listing directories.
+- `meta.md` in every post folder (pipeline posts too, not only remixes) — plain `key: value` lines the Instagram operating layer reads for publishing and analytics. Nothing here gets pasted anywhere:
+  ```
+  origin: pipeline
+  pillar: <content pillar this post serves>
+  topic: <short topic label>
+  hook: <the caption's opening line / on-image headline>
+  cta: <the call to action, or "none">
+  format: <single image | carousel | reel>
+  review: <clean | flagged>   (flagged = brand-consistency-reviewer left a human-judgment note)
+  variant: <colorway to publish, only when several image-<variant>.png exist>
+  ```
+  For a Reel, the finished video goes in the folder as `reel.mp4` (optional `cover.jpg`); until the video exists the post stays unpublishable, which is expected — this project generates beat sheets, not video.
+- `<brand-path>/content-packages/<YYYY-MM>/_index.md` — one scannable table for the whole month: post number, name, format, colorway, pillar, an **Origin** column (`pipeline` / `remix` — see `social-content-remix` for the latter) if any post in the table came from a remix, and a **Status** column (`draft` / `ready` / `posted`). A human sets `ready` once they're happy with a post; for brands running the Instagram operating layer (`instagram_os/`, opt-in per brand), `ready` is what makes the publisher pick the post up, and it flips the cell to `posted` itself after a real publish. For everyone else, the human still sets `posted` by hand. This is the calendar view — read this before opening any post folder, don't rebuild it by listing directories.
 
 Check `visual-design-system.md`'s `## Rendering` → `Method` before deciding how the image half of each post folder gets filled:
 - **`direct`:** call this repo's `scripts/render_text_card.py` (this repo, not the brand folder — run it from/with a path back to this repo's root) once per image needed (once per slide for a carousel, once per colorway when a post wants both), passing the brand's confirmed hex values, font family, and the logo asset matching the requested colorway from `<brand-path>/assets/` — using `image-prompt-engineer`'s on-image-text/layout output as the headline input. Check the brand file's `## Rendering` notes for its confirmed accent treatment (e.g. a standalone `--bar`, no label text) before defaulting to `--eyebrow` — don't silently reintroduce a label the brand has explicitly moved away from. Real files (`image.png` / `image-black.png` + `image-white.png` / `slide-1.png`...) land straight in the post folder; no prompt file alongside them.

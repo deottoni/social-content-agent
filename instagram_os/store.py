@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS locks (name TEXT PRIMARY KEY, acquired_at TEXT NOT NU
 CREATE TABLE IF NOT EXISTS hashtag_searches (
     hashtag TEXT PRIMARY KEY, hashtag_id TEXT, first_searched_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS seen_posts (key TEXT PRIMARY KEY, seen_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -278,7 +279,12 @@ class Store:
         return dict(row) if row else None
 
     def has_opportunity(self, dedupe_key):
-        return self.conn.execute("SELECT 1 FROM opportunities WHERE dedupe_key=?", (dedupe_key,)).fetchone() is not None
+        return self.conn.execute("SELECT 1 FROM opportunities WHERE dedupe_key=? UNION "
+                                 "SELECT 1 FROM seen_posts WHERE key=?", (dedupe_key, dedupe_key)).fetchone() is not None
+
+    def mark_seen(self, key):
+        """Remember a third-party post that was assessed and not queued, so it isn't re-assessed."""
+        self.conn.execute("INSERT OR IGNORE INTO seen_posts(key, seen_at) VALUES (?, ?)", (key, iso()))
 
     def transition_opportunity(self, opp_id, new_status, notes=None):
         new_status = OpportunityStatus(new_status)

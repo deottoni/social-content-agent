@@ -9,12 +9,13 @@ Duplicate-publish protection, in layers:
      the account's recent media (caption match) before anything is retried.
   6. Dry-run never writes PUBLISHED, so a rehearsal can't block or fake a real publish.
 """
+import json
 import time
 from datetime import timedelta
 
 from .client import (AuthError, InstagramAPIError, MediaError, RateLimitError, TransientError)
 from .content import discover_ready_posts, load_post, mark_posted_in_index
-from .media_host import MediaHostError
+from .media_host import MediaHostError, MediaNotReachable
 from .models import ContentType, PublicationStatus as S
 from .policy import publish_blockers
 from .store import iso, parse_iso, utcnow
@@ -58,7 +59,6 @@ class Publisher:
             elif existing["status"] in (S.PUBLISHED.value, S.PUBLISHING.value):
                 continue
             elif existing["content_hash"] != h:
-                import json
                 fields["asset_paths"] = json.dumps(fields["asset_paths"])
                 self.store.update_publication(existing["id"], **fields)
                 if existing["status"] != S.DRAFT.value:
@@ -196,6 +196,12 @@ class Publisher:
             self.store.transition_publication(pub["id"], S.QUEUED, "run stopped before publish",
                                               attempts=pub["attempts"] - 1)
             raise
+        except MediaNotReachable as e:
+            # Waiting on the brand's sync to public storage: not the post's fault, don't burn an attempt.
+            self.store.transition_publication(pub["id"], S.QUEUED, f"waiting for media: {e}",
+                                              attempts=pub["attempts"] - 1)
+            self.log.record("PUBLISH", f"Media for “{cid}” not reachable yet — will retry", error=str(e), ref=cid)
+            return "waiting for media"
         except MediaHostError as e:
             self.store.transition_publication(pub["id"], S.REQUIRES_REVIEW, str(e))
             self.log.record("PUBLISH", f"Cannot host media for “{cid}”", error=str(e), approval_required=True, ref=cid)

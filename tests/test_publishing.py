@@ -245,3 +245,21 @@ def test_missing_media_host_requires_review(brand, store, fake, activity):
     run_pipeline(pub)
     p = store.publications()[0]
     assert p["status"] == "REQUIRES_REVIEW" and "media host" in p["status_reason"]
+
+
+def test_unsynced_media_waits_in_queue_without_burning_attempts(brand, store, fake, activity):
+    from instagram_os.media_host import MediaNotReachable
+    from instagram_os.publisher import Publisher
+
+    class Lagging:
+        calls = 0
+
+        def url_for(self, path):
+            Lagging.calls += 1
+            raise MediaNotReachable("404")
+    pub = Publisher(brand, store, fake, activity, Lagging(), sleep=lambda s: None)
+    make_post(brand)
+    run_pipeline(pub)
+    pub.publish_due()
+    p = store.publications()[0]
+    assert p["status"] == "QUEUED" and p["attempts"] == 0 and "waiting for media" in p["status_reason"]

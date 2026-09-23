@@ -1,5 +1,5 @@
 """Autonomy boundaries, publishing caps, and quiet hours."""
-from datetime import datetime, time, timedelta, timezone
+from datetime import time, timedelta, timezone
 
 from .models import ContentType
 from .store import parse_iso, utcnow

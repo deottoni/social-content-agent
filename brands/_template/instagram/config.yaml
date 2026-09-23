@@ -1,0 +1,48 @@
+# Instagram operating layer — per-brand config.
+# `instagram --brand <slug> init` copies this to <brand-path>/instagram/config.yaml.
+# Only overrides go here; every other value comes from instagram_os/defaults.yaml.
+# NEVER put tokens or app secrets in this file — they come from environment variables
+# (see docs/instagram-setup.md).
+
+# Flip to true once the Meta app, token, and media hosting below are set up.
+enabled: false
+
+api:
+  mode: dry_run            # dry_run until you have watched a few dry runs; then live
+  login_type: instagram    # instagram | facebook (facebook enables watchlist discovery)
+
+autonomy:
+  publish_post: approval   # auto | approval   (env PUBLISH_MODE overrides)
+  reply_to_comment: auto   # replies still need confidence >= engagement.thresholds.auto_reply
+  hide_spam_comment: approval
+
+publishing:
+  max_posts_per_day: 1
+  max_reels_per_week: 3
+  timezone: UTC            # e.g. America/Chicago — quiet hours are in this timezone
+  quiet_hours:
+    start: "22:00"
+    end: "07:00"
+
+media_host:
+  type: none               # none | url_prefix | command — see docs/instagram-setup.md#media-hosting
+  base_url: ""
+  command: ""
+
+validation:
+  blocked_terms: []        # words that must never go out without a human look
+
+engagement:
+  thresholds:
+    auto_reply: 0.95
+    suggest: 0.70
+
+opportunities:
+  watchlist:
+    accounts: []           # professional accounts only (Business Discovery)
+    hashtags: []
+    topics: []
+  relationships: {}        # username: 0..1
+
+reasoner:
+  provider: anthropic      # anthropic | rules

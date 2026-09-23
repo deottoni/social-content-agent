@@ -14,6 +14,10 @@ class MediaHostError(Exception):
     pass
 
 
+class MediaNotReachable(MediaHostError):
+    """Hosting is configured but the file isn't publicly reachable yet (e.g. sync lag). Retry later."""
+
+
 class MediaHost:
     def url_for(self, path):
         raise NotImplementedError
@@ -43,9 +47,9 @@ class UrlPrefixHost(MediaHost):
                 req = urllib.request.Request(url, method="HEAD")
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     if resp.status >= 400:
-                        raise MediaHostError(f"{url} returned HTTP {resp.status}")
+                        raise MediaNotReachable(f"{url} returned HTTP {resp.status}")
             except OSError as e:
-                raise MediaHostError(f"{url} is not reachable yet ({e}). Sync the content folder first.") from None
+                raise MediaNotReachable(f"{url} is not reachable yet ({e}). Sync the content folder first.") from None
         return url
 
 

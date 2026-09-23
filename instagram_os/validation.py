@@ -9,7 +9,6 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from .models import ContentType
 

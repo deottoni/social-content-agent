@@ -148,3 +148,17 @@ scheduler:
   # Empty = the job only writes a brief and records a human action.
   plan_command: ""
   generate_command: ""
+  # Suggested cadence (standard 5-field cron, in the scheduler host's timezone).
+  # `instagram schedule` prints ready-to-install crontab lines from this.
+  cron:
+    comments: "*/30 * * * *"
+    publish: "5 * * * *"
+    opportunities: "15 */4 * * *"
+    analytics: "0 6 * * *"
+    weekly-review: "0 7 * * 1"
+    plan: "0 8 * * 1"
+    token-check: "30 5 * * *"
+  # Optional: a command that receives a refreshed Instagram Login token on stdin and
+  # stores it in your secret store (e.g. `gh secret set INSTAGRAM_ACCESS_TOKEN`).
+  # Without it, token-check only warns before expiry — it never writes secrets to disk.
+  token_sink_command: ""

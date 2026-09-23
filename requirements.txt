@@ -1,0 +1,6 @@
+# Instagram operating layer (instagram_os/). The Claude Code skills need none of this.
+pyyaml>=6.0
+pillow>=10.0
+# Optional: Claude as the reasoning layer for comment replies / opportunity suggestions.
+# Without it (or without ANTHROPIC_API_KEY) the offline rules reasoner is used, which never auto-replies.
+anthropic>=1.0

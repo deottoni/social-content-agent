@@ -12,3 +12,8 @@ brands/*
 
 # Machine-local pointer to the content-inbox repo clone (see inbox-drain skill).
 .claude/inbox.local.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/

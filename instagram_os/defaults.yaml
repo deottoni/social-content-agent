@@ -1,0 +1,150 @@
+# Framework defaults for the Instagram operating layer.
+# A brand overrides any of these in <brand-path>/instagram/config.yaml (deep-merged).
+# Secrets never go in either file — see docs/instagram-setup.md for env vars.
+
+# Nothing runs for a brand until its own config sets this to true.
+enabled: false
+
+api:
+  # dry_run: read calls hit the real API only if credentials exist; every write
+  #          (publish, reply, hide) is simulated and logged, never sent.
+  # live:    writes are sent. Override with env INSTAGRAM_API_MODE.
+  mode: dry_run
+  # instagram: Instagram API with Instagram Login (graph.instagram.com). No Facebook Page
+  #            needed. No Business Discovery / Hashtag Search (opportunity monitoring
+  #            falls back to manual import).
+  # facebook:  Instagram API with Facebook Login (graph.facebook.com). Needs a linked
+  #            Facebook Page. Enables Business Discovery + Hashtag Search.
+  login_type: instagram
+  graph_version: v25.0
+  timeout_seconds: 30
+  max_retries: 3
+  backoff_base_seconds: 2
+  backoff_max_seconds: 60
+  # Warn (and refresh, for Instagram Login tokens) when a token expires within this window.
+  token_refresh_days_before_expiry: 10
+
+# Autonomy boundaries. Values:
+#   auto     — the system acts on its own (still subject to caps, quiet hours, thresholds)
+#   approval — the system prepares the action; a human approves it via the CLI
+#   human    — the system only surfaces it as a human opportunity, never acts
+#   off      — disabled
+# Actions the official API does not support are locked to `human` whatever is set here:
+# third_party_comment, like_post, follow_account, send_first_dm.
+autonomy:
+  publish_post: approval        # env PUBLISH_MODE=auto|approval overrides this
+  reply_to_comment: auto        # still gated per-comment by engagement.thresholds
+  hide_spam_comment: approval
+  third_party_comment: human
+  collect_analytics: auto
+  monitor_opportunities: auto
+  plan_content: approval        # the idea-board approval gate in CLAUDE.md
+  generate_content: approval
+
+publishing:
+  max_posts_per_day: 1          # all feed posts incl. Reels, rolling calendar day
+  max_reels_per_week: 3         # rolling 7 days
+  min_hours_between_posts: 4
+  timezone: UTC
+  quiet_hours:
+    start: "22:00"
+    end: "07:00"
+  # Only content-package months this many months back (incl. current) are ingested.
+  ingest_months_back: 2
+  container_poll_seconds: 10
+  container_timeout_seconds: 600
+  max_publish_attempts: 3
+  # Hard stop: never publish if Meta's own content_publishing_limit says less than this remains.
+  min_api_quota_remaining: 5
+
+# How local files get the public HTTPS URL the Instagram API requires.
+#   none:       publishing stops at REQUIRES_REVIEW with a clear reason
+#   url_prefix: you sync <brand-path>/content-packages/ to public storage yourself;
+#               base_url + "/<YYYY-MM>/<NNN-slug>/<file>" must resolve
+#   command:    a shell command that uploads {path} and prints the public URL on stdout
+media_host:
+  type: none
+  base_url: ""
+  command: ""
+
+validation:
+  caption_max_chars: 2200
+  max_hashtags: 30
+  max_mentions: 20
+  image_max_bytes: 8000000
+  image_min_width: 320
+  image_max_width: 1440
+  aspect_min: 0.8               # 4:5
+  aspect_max: 1.91              # 1.91:1
+  video_max_bytes: 1000000000
+  video_extensions: [".mp4", ".mov"]
+  # Extra terms that force REQUIRES_REVIEW if found in a caption (brand no-go list).
+  blocked_terms: []
+  # Posts whose meta.md says `review: flagged` go to REQUIRES_REVIEW.
+  respect_review_flags: true
+
+engagement:
+  enabled: true
+  thresholds:
+    auto_reply: 0.95            # confidence >= this -> reply autonomously
+    suggest: 0.70               # suggest <= confidence < auto_reply -> draft + human approval
+                                # below suggest -> escalate, no reply drafted
+  # These categories are never replied to autonomously, whatever the confidence.
+  always_human_categories: [criticism, disagreement, sensitive, partnership, sales_inquiry, potential_customer, ambiguous]
+  # These categories never get a reply at all.
+  no_reply_categories: [spam]
+  media_lookback: 10            # newest N own media scanned per run
+  max_replies_per_hour: 10
+  max_replies_per_day: 40
+  max_replies_per_user_per_day: 2
+  # Loop guard: never auto-reply inside a thread that already has this many of our replies.
+  max_own_replies_per_thread: 1
+  reply_max_chars: 300
+
+opportunities:
+  enabled: true
+  watchlist:
+    accounts: []                # Instagram usernames (must be Business/Creator accounts)
+    hashtags: []                # without '#'; Meta allows 30 unique per rolling 7 days
+    topics: []                  # free-text relevance topics used for scoring
+  max_media_per_account: 5
+  max_hashtags_per_run: 5
+  max_media_per_hashtag: 10
+  default_ttl_hours: 48
+  min_score: 0.30
+  max_new_per_run: 10
+  weights:
+    topical_relevance: 0.30
+    audience_overlap: 0.15
+    discussion_activity: 0.15
+    recency: 0.15
+    relationship: 0.10
+    brand_value: 0.10
+    comment_confidence: 0.05
+  priority_thresholds:
+    high: 0.70
+    medium: 0.45
+  # Accounts you have a relationship with (0..1). Anything unlisted scores 0.
+  relationships: {}
+
+analytics:
+  media_lookback_days: 30
+  # Minimum hours between two snapshots of the same media.
+  snapshot_min_hours: 6
+
+learning:
+  lookback_days: 90
+  min_posts_per_group: 2
+  min_posts_total: 5
+
+reasoner:
+  provider: anthropic           # anthropic | rules (offline; never auto-replies)
+  model: claude-opus-5
+  effort: low
+  max_tokens: 1024
+
+scheduler:
+  # Optional commands the plan/generate jobs run (e.g. a headless Claude Code call).
+  # Empty = the job only writes a brief and records a human action.
+  plan_command: ""
+  generate_command: ""

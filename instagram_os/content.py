@@ -7,7 +7,14 @@
         slide-1.png, slide-2.png, ...    carousel, in posting order
         reel.mp4 | video.mp4 (+ cover.jpg)  Reel (added for the Instagram layer)
         meta.md                          optional `key: value` metadata
-and a month calendar `_index.md` with a Status column (ready / posted).
+and a month calendar `_index.md` with a Status column and an optional Publish column.
+
+Status vocabulary (same in `_index.md` and in a post's meta.md `status:` line):
+    ready     built and paste-ready — never picked up for publishing
+    approved  cleared to publish — the only status this layer ever ingests
+    posted    published (by hand or by this layer) — never ingested again
+Publish (or meta.md `publish_at:`) is an optional `YYYY-MM-DD` or `YYYY-MM-DD HH:MM` in the
+brand's `publishing.timezone`; an approved post is not published before it.
 
 This module only reads that convention (and flips Status to `posted` after a real
 publish). It never writes captions or media.
@@ -21,6 +28,7 @@ from pathlib import Path
 from .models import ContentType
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
+INGEST_STATUSES = {"approved"}
 VIDEO_NAMES = ("reel", "video")
 
 
@@ -34,6 +42,7 @@ class ContentArtifact:
     cover: Path = None
     meta: dict = field(default_factory=dict)
     index_status: str = None
+    publish_at: str = None                          # raw Publish value, parsed by policy.parse_publish_at
     problems: list = field(default_factory=list)   # reasons it cannot be published as-is
 
     @property
@@ -88,6 +97,11 @@ def parse_meta(path):
 
 def parse_index(path):
     """Return {post_number: status} from a month's _index.md markdown table."""
+    return {num: row["status"] for num, row in parse_index_rows(path).items()}
+
+
+def parse_index_rows(path):
+    """Return {post_number: {"status": ..., "publish": ...}} from a month's _index.md table."""
     statuses = {}
     if not path.exists():
         return statuses
@@ -104,8 +118,10 @@ def parse_index(path):
         row = dict(zip(header, cells))
         num = re.sub(r"\D", "", row.get("#", row.get("post", row.get("no", cells[0]))))
         status = row.get("status", "").lower()
+        publish = row.get("publish", row.get("publish at", "")).strip()
         if num:
-            statuses[num.zfill(3)] = re.sub(r"[^a-z]", "", status)
+            statuses[num.zfill(3)] = {"status": re.sub(r"[^a-z]", "", status),
+                                      "publish": publish if publish not in ("", "-", "—") else None}
     return statuses
 
 
@@ -144,7 +160,7 @@ def _month_dirs(content_dir, months_back):
     return sorted(d for d in Path(content_dir).glob("*-*") if d.is_dir() and d.name in wanted)
 
 
-def load_post(folder, index_status=None):
+def load_post(folder, index_status=None, publish_at=None):
     folder = Path(folder)
     content_id = f"{folder.parent.name}/{folder.name}"
     meta = parse_meta(folder / "meta.md")
@@ -185,21 +201,31 @@ def load_post(folder, index_status=None):
             problems.append("no publishable media (image.png, slide-N.png, reel.mp4)")
 
     return ContentArtifact(content_id=content_id, folder=folder, content_type=ctype, caption=caption,
-                           assets=assets, cover=cover, meta=meta, index_status=index_status, problems=problems)
+                           assets=assets, cover=cover, meta=meta, index_status=index_status,
+                           publish_at=publish_at or meta.get("publish_at"), problems=problems)
+
+
+def load_post_with_index(folder):
+    """load_post plus the post's own row from the month's _index.md (status, Publish)."""
+    folder = Path(folder)
+    row = parse_index_rows(folder.parent / "_index.md").get(folder.name[:3]) or {}
+    status = row.get("status") or parse_meta(folder / "meta.md").get("status", "").lower() or None
+    return load_post(folder, index_status=status, publish_at=row.get("publish"))
 
 
 def discover_ready_posts(content_dir, months_back=2):
-    """Posts a human has marked ready (in _index.md or meta.md `status: ready`).
-    Anything marked `posted` is skipped: it was already posted, by hand or by us."""
+    """Posts cleared for publishing (`approved` in _index.md, or meta.md `status: approved`).
+    `ready` means built, not cleared, and is never picked up. Anything marked `posted` is
+    skipped: it was already posted, by hand or by us."""
     out = []
     for month in _month_dirs(content_dir, months_back):
-        index = parse_index(month / "_index.md")
+        index = parse_index_rows(month / "_index.md")
         for folder in sorted(p for p in month.iterdir() if p.is_dir() and re.match(r"\d{3}-", p.name)):
-            num = folder.name[:3]
+            row = index.get(folder.name[:3]) or {}
             meta_status = parse_meta(folder / "meta.md").get("status", "").lower()
-            if "posted" in (index.get(num), meta_status):
+            if "posted" in (row.get("status"), meta_status):
                 continue
-            status = index.get(num) or meta_status
-            if status == "ready":
-                out.append(load_post(folder, index_status=status))
+            status = row.get("status") or meta_status
+            if status in INGEST_STATUSES:
+                out.append(load_post(folder, index_status=status, publish_at=row.get("publish")))
     return out

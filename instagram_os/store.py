@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS publications (
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     approved_at TEXT,
+    publish_at TEXT,                 -- earliest publish time (UTC ISO), from the Publish column
     published_at TEXT,
     api_response TEXT,
     created_at TEXT NOT NULL,
@@ -113,6 +114,13 @@ class Store:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self):
+        """Additive column migrations for state.db files created by earlier versions."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(publications)")}
+        if "publish_at" not in cols:
+            self.conn.execute("ALTER TABLE publications ADD COLUMN publish_at TEXT")
 
     def close(self):
         self.conn.close()

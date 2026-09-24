@@ -40,3 +40,13 @@ Write `<brand-path>/social-content-system.md` from the template, filled in with 
 ## Step 3 — confirm
 
 Show the user both finished files (or a summary if long) and ask if anything needs correcting before considering onboarding done. Create the empty `idea-boards/` and `content-packages/` folders under `<brand-path>/`. Remind the user they can now run `social-trend-scan` for this brand.
+
+## Step 4 — optional: Instagram publishing
+
+Ask one question: "Do you want this brand to publish to Instagram automatically later (through the official API), or keep posting by hand?" Default is by hand — if so, stop here; nothing else is needed.
+
+If yes, don't configure it inside this interview (it needs a Meta app and a token first). Instead:
+- Run `bin/instagram --brand <slug> init` from this repo's root (with the repo's `.venv` Python if it exists). It copies the generic templates into `<brand-path>/instagram/` (`config.yaml` with `enabled: false`, `facts.md`). Never write these files into this repo.
+- Fill `<brand-path>/instagram/facts.md` from what you just learned (what the brand is, what it's happy to point people to, what a reply must never say). Keep it short and literally true, and leave a section empty rather than guessing.
+- Set `publishing.timezone` in that `config.yaml` if the user gave one.
+- Point the user to `docs/instagram-setup.md` for the rest (professional account, Meta app, token in `~/.config/instagram-os/<slug>.env` — outside both this repo and the brand folder — media hosting, dry-run week). Remind them that only posts marked `approved` in `_index.md` are ever published.

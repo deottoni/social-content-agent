@@ -121,3 +121,50 @@ def test_cli_init_creates_config(tmp_path, capsys):
     cfg = yaml.safe_load((brand_dir / "instagram" / "config.yaml").read_text())
     assert cfg["enabled"] is False and cfg["api"]["mode"] == "dry_run"
     assert (brand_dir / "instagram" / "facts.md").exists()
+
+
+def test_cron_matching():
+    from datetime import datetime
+    from instagram_os.scheduler import cron_matches
+    mon_0700 = datetime(2026, 9, 21, 7, 0)  # a Monday
+    assert cron_matches("0 7 * * 1", mon_0700)
+    assert not cron_matches("0 7 * * 2", mon_0700)
+    assert cron_matches("*/30 * * * *", mon_0700.replace(minute=30))
+    assert not cron_matches("*/30 * * * *", mon_0700.replace(minute=15))
+    assert cron_matches("15 */4 * * *", mon_0700.replace(hour=8, minute=15))
+    assert cron_matches("0 9 * * 0", datetime(2026, 9, 27, 9, 0)) and cron_matches("0 9 * * 7", datetime(2026, 9, 27, 9, 0))
+    assert cron_matches("0 9 * * 1-5", mon_0700.replace(hour=9))
+
+
+def test_tick_runs_due_jobs_once_and_catches_up_after_sleep(brand, store, fake):
+    from datetime import datetime, timedelta
+    from instagram_os.scheduler import tick
+    write_config(brand, scheduler={"cron": {"comments": "*/30 * * * *", "weekly-review": "0 7 * * 1",
+                                            "analytics": "0 6 * * *"}})
+    rt = Runtime(brand, client=fake, store=store)
+    t0 = datetime(2026, 9, 21, 7, 0).astimezone()  # Monday 07:00 local
+    assert {j for j, _, _ in tick(rt, now=t0)} == {"comments", "weekly-review"}
+    assert {j for j, _, _ in tick(rt, now=t0)} == set()        # same instant again: nothing re-runs
+    # Laptop asleep for two days: every job that came due runs exactly once on wake.
+    ran = [j for j, _, _ in tick(rt, now=t0 + timedelta(days=2))]
+    assert sorted(ran) == sorted(set(brand.config["scheduler"]["cron"]) - {"weekly-review"})  # weekly: not due again yet
+    assert ran[0] == "token-check"                              # auth is checked before anything else
+
+
+def test_launchd_plist(brand):
+    from instagram_os.scheduler import launchd_plist
+    xml = launchd_plist(brand, python="/usr/bin/python3")
+    assert "<string>tick</string>" in xml and "--brand" in xml and "StartInterval" in xml
+    assert "com.social-content-agent.instagram.test-brand" in xml
+    assert "TOKEN" not in xml.upper().replace("TOKEN_", "")  # never embeds secrets
+
+
+def test_env_file_is_loaded_without_overriding_the_shell(tmp_path):
+    from instagram_os.cli import load_env_file
+    (tmp_path / "test-brand.env").write_text(
+        "# secrets\nexport INSTAGRAM_ACCESS_TOKEN='abc'\nINSTAGRAM_ACCOUNT_ID=123\nINSTAGRAM_API_MODE=live\n")
+    env = {"INSTAGRAM_OS_ENV_DIR": str(tmp_path), "INSTAGRAM_API_MODE": "dry_run"}
+    assert load_env_file("test-brand", env) == tmp_path / "test-brand.env"
+    assert env["INSTAGRAM_ACCESS_TOKEN"] == "abc" and env["INSTAGRAM_ACCOUNT_ID"] == "123"
+    assert env["INSTAGRAM_API_MODE"] == "dry_run"
+    assert load_env_file("other-brand", env) is None

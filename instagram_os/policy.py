@@ -1,5 +1,5 @@
 """Autonomy boundaries, publishing caps, and quiet hours."""
-from datetime import time, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from .models import ContentType
 from .store import parse_iso, utcnow
@@ -11,6 +11,24 @@ def _tz(name):
         return ZoneInfo(name)
     except Exception:  # missing tzdata: fall back to UTC rather than crash a scheduled run
         return timezone.utc
+
+
+def parse_publish_at(value, cfg):
+    """`YYYY-MM-DD` or `YYYY-MM-DD HH:MM` in the brand's timezone -> aware UTC datetime.
+    A bare date means "any time that day" (still subject to quiet hours and caps)."""
+    if not value:
+        return None
+    value = str(value).strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            naive = datetime.strptime(value, fmt)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValueError(f"publish date {value!r} is not YYYY-MM-DD or YYYY-MM-DD HH:MM")
+    local = naive.replace(tzinfo=_tz(cfg["publishing"].get("timezone", "UTC")))
+    return local.astimezone(timezone.utc)
 
 
 def in_quiet_hours(cfg, now=None):

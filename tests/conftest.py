@@ -82,7 +82,7 @@ def write_config(ctx, **overrides):
 
 
 def make_post(ctx, number="001", slug="five-ways", month=None, caption="Five ways to use Claude this week.\n\nSave this for Monday.\n\n#ai #smallbusiness",
-              kind="image", size=(1080, 1350), status="ready", meta=None, variants=None):
+              kind="image", size=(1080, 1350), status="approved", meta=None, variants=None):
     from datetime import date
     month = month or date.today().strftime("%Y-%m")
     folder = ctx.content_dir / month / f"{number}-{slug}"

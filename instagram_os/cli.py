@@ -13,9 +13,35 @@ from pathlib import Path
 from .config import ConfigError, load_brand, resolve_brand_path
 from .models import OpportunityStatus
 from .policy import boundaries_table
-from .scheduler import JOBS, Runtime, crontab_lines, run_job
+from .scheduler import JOBS, Runtime, crontab_lines, launchd_plist, run_job, tick
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "brands" / "_template" / "instagram"
+
+
+def env_file_path(slug, env=None):
+    env = os.environ if env is None else env
+    base = Path(env.get("INSTAGRAM_OS_ENV_DIR") or Path.home() / ".config" / "instagram-os")
+    return base / f"{slug}.env"
+
+
+def load_env_file(slug, env=None):
+    """Load KEY=VALUE lines from ~/.config/instagram-os/<slug>.env into the environment.
+    Variables already set win, so a one-off `INSTAGRAM_API_MODE=dry_run instagram ...` still works.
+    Lives outside every repo so neither the public framework nor the brand folder holds secrets."""
+    env = os.environ if env is None else env
+    path = env_file_path(slug, env)
+    if not path.is_file():
+        return None
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.removeprefix("export ").split("=", 1)
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        env.setdefault(key, value)
+    return path
 
 
 def _print_table(rows, headers):
@@ -207,7 +233,9 @@ def build_parser():
                         ("token-check", "verify token, warn/refresh before expiry"),
                         ("daily-run", "token-check, publish, comments, opportunities, analytics")]:
         sub.add_parser(name, help=help_)
-    sub.add_parser("schedule", help="print crontab lines for this brand")
+    sub.add_parser("tick", help="run every scheduled job that came due since the last tick (for launchd)")
+    sc = sub.add_parser("schedule", help="print crontab lines (or a launchd plist) for this brand")
+    sc.add_argument("--launchd", action="store_true", help="print a macOS LaunchAgent plist that runs `tick`")
     lg = sub.add_parser("log", help="show the activity log")
     lg.add_argument("--limit", type=int, default=40)
     lg.add_argument("--category")
@@ -219,6 +247,7 @@ def main(argv=None):
     if not args.brand:
         print("error: pass --brand <slug> or set INSTAGRAM_BRAND", file=sys.stderr)
         return 2
+    load_env_file(args.brand)
     try:
         if args.command == "init":
             cmd_init(args)
@@ -242,7 +271,14 @@ def main(argv=None):
         elif args.command == "opportunities":
             cmd_opportunities(rt, args)
         elif args.command == "schedule":
-            print(crontab_lines(ctx))
+            print(launchd_plist(ctx) if args.launchd else crontab_lines(ctx))
+        elif args.command == "tick":
+            ran = tick(rt)
+            for job, status, summary in ran:
+                print(f"{job}: {status} — {summary}")
+            if not ran:
+                print("tick: nothing due")
+            return 0 if all(st in ("OK", "SKIPPED") for _, st, _ in ran) else 1
         elif args.command == "log":
             cmd_log(rt, args)
         elif args.command in JOBS:

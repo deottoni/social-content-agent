@@ -5,8 +5,9 @@ import os
 import shlex
 import subprocess
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from .activity import ActivityLog
 from .analytics import AnalyticsCollector
@@ -235,6 +236,110 @@ def run_job(rt, name):
     rt.activity.record("SCHEDULER", f"Job {name}: {status}", result=summary if status == "OK" else None,
                        error=summary if status != "OK" else None)
     return status, summary
+
+
+# ------------------------------------------------------------------ tick
+# One entry point for hosts that just wake up periodically (launchd, a laptop that sleeps):
+# `instagram --brand <slug> tick` runs every job in scheduler.cron that came due since the
+# last tick, once, no matter how many runs were missed while the machine was asleep.
+TICK_ORDER = ("token-check", "publish", "comments", "opportunities", "analytics", "weekly-review", "plan", "generate")
+TICK_MAX_CATCHUP = timedelta(days=7)
+TICK_FIRST_LOOKBACK = timedelta(minutes=15)
+
+
+def _cron_field_matches(expr, value, lo, hi):
+    for part in expr.split(","):
+        base, _, step = part.partition("/")
+        step = int(step) if step else 1
+        if base == "*":
+            start, end = lo, hi
+        elif "-" in base:
+            start, end = (int(x) for x in base.split("-", 1))
+        else:
+            start = int(base)
+            end = hi if step > 1 else start
+        if start <= value <= end and (value - start) % step == 0:
+            return True
+    return False
+
+
+def cron_matches(expr, dt):
+    """Standard 5-field cron (minute hour day-of-month month day-of-week; 0 or 7 = Sunday)."""
+    minute, hour, dom, month, dow = expr.split()
+    cron_dow = (dt.weekday() + 1) % 7
+    dow_ok = _cron_field_matches(dow, cron_dow, 0, 7) or (cron_dow == 0 and _cron_field_matches(dow, 7, 0, 7))
+    dom_ok = _cron_field_matches(dom, dt.day, 1, 31)
+    day_ok = (dom_ok or dow_ok) if (dom != "*" and dow != "*") else (dom_ok and dow_ok)
+    return (day_ok and _cron_field_matches(minute, dt.minute, 0, 59)
+            and _cron_field_matches(hour, dt.hour, 0, 23) and _cron_field_matches(month, dt.month, 1, 12))
+
+
+def cron_due(expr, since, now):
+    """True if `expr` matched any whole minute in (since, now]. Times in the host's local zone."""
+    t = since.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    while t <= now:
+        if cron_matches(expr, t):
+            return True
+        t += timedelta(minutes=1)
+    return False
+
+
+def tick(rt, now=None):
+    """Run each scheduled job that came due since the last tick. Returns [(job, status, summary)]."""
+    now = (now or datetime.now().astimezone()).replace(microsecond=0)
+    cron = rt.ctx.config["scheduler"]["cron"]
+    last = rt.store.get_kv("tick:last")
+    last = parse_iso(last).astimezone(now.tzinfo) if last else now - TICK_FIRST_LOOKBACK
+    since = max(last, now - TICK_MAX_CATCHUP)
+    if since >= now:
+        return []
+    due = [job for job in sorted(cron, key=lambda j: TICK_ORDER.index(j) if j in TICK_ORDER else len(TICK_ORDER))
+           if job in JOBS and job != "daily-run" and cron_due(cron[job], since, now)]
+    rt.store.set_kv("tick:last", now.isoformat())  # before running: a crashing job must not re-run every tick
+    ran = []
+    for job in due:
+        status, summary = run_job(rt, job)
+        ran.append((job, status, summary))
+    return ran
+
+
+def launchd_plist(ctx, repo_root=None, python=None, interval_seconds=900):
+    """A per-user LaunchAgent that runs `tick` every `interval_seconds` and at login.
+    launchd does not run missed intervals while the Mac sleeps; tick catches up on wake."""
+    repo_root = Path(repo_root or Path(__file__).resolve().parents[1])
+    label = f"com.social-content-agent.instagram.{ctx.slug}"
+    args = [python or sys.executable, str(repo_root / "bin" / "instagram"), "--brand", ctx.slug, "tick"]
+    log = ctx.instagram_dir / "launchd.log"
+    arg_xml = "\n".join(f"    <string>{escape(a)}</string>" for a in args)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Instagram OS runner for {escape(ctx.slug)}. Install:
+       cp this-file ~/Library/LaunchAgents/{label}.plist
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/{label}.plist
+     Remove:
+       launchctl bootout gui/$(id -u)/{label}
+     Secrets are read by the CLI from ~/.config/instagram-os/{escape(ctx.slug)}.env, never from this file. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{label}</string>
+  <key>ProgramArguments</key>
+  <array>
+{arg_xml}
+  </array>
+  <key>WorkingDirectory</key>
+  <string>{escape(str(repo_root))}</string>
+  <key>StartInterval</key>
+  <integer>{int(interval_seconds)}</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>{escape(str(log))}</string>
+  <key>StandardErrorPath</key>
+  <string>{escape(str(log))}</string>
+</dict>
+</plist>
+"""
 
 
 def crontab_lines(ctx, repo_root=None):

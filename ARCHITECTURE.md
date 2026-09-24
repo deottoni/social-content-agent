@@ -41,7 +41,8 @@ brand-drift-audit     — compares remix history to brand files, proposes (never
     `caption.txt` (paste-ready caption + hashtags), `image.png` / `image-<variant>.png` /
     `slide-N.png` or `image-prompt.txt`, optional `source/` and `meta.md` (remixes).
   - `<brand-path>/content-packages/<YYYY-MM>/_index.md` — month calendar with a
-    `Status` column (`ready` / `posted`) that a human edited by hand.
+    `Status` column (`ready` / `posted`) that a human edited by hand. The Instagram layer
+    adds `approved` (cleared to publish) and an optional `Publish` date column.
   - There was no database, no queue, and no record of anything published.
 
 ### What did not exist
@@ -75,8 +76,10 @@ duplicate any skill or agent.
   `state.db`, `activity.log`, `recommendations/`), consistent with the rule that brand
   data never lives in this repo.
 - **Per-brand opt-in.** Nothing runs for a brand unless its
-  `<brand-path>/instagram/config.yaml` exists and sets `enabled: true`. The first brand
-  to enable it is the maintainer's `presence-project`; no brand name is hard-coded.
+  `<brand-path>/instagram/config.yaml` exists and sets `enabled: true`; no brand name is
+  hard-coded. Only posts marked `approved` in the month's `_index.md` are ever published.
+- **Secrets live outside both folders**, in `~/.config/instagram-os/<slug>.env`, loaded by
+  the CLI. The repo holds code/defaults/templates; the brand folder holds config/state.
 
 | Stage | Module |
 |---|---|

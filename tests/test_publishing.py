@@ -50,9 +50,9 @@ def test_carousel_and_reel(brand, store, fake, publisher):
 def test_never_publishes_twice(brand, store, fake, publisher):
     make_post(brand)
     run_pipeline(publisher)
-    # Second run, even after someone flips the calendar back to ready.
+    # Second run, even after someone flips the calendar back to approved.
     idx = next(brand.content_dir.glob("*/_index.md"))
-    idx.write_text(idx.read_text().replace("posted", "ready"))
+    idx.write_text(idx.read_text().replace("posted", "approved"))
     assert run_pipeline(publisher) == []
     assert len(fake.media) == 1
     with pytest.raises(InvalidTransition):
@@ -137,6 +137,7 @@ def test_content_change_resets_to_draft(brand, store, publisher):
 
 def test_caps_and_quiet_hours(brand, store, fake, publisher):
     write_config(brand, publishing={"max_posts_per_day": 1})
+    publisher.cfg = brand.config
     publisher.cfg = brand.config
     make_post(brand, "001", "one")
     make_post(brand, "002", "two", caption="Second post.")
@@ -274,3 +275,80 @@ def test_switching_to_auto_picks_up_already_validated_posts(brand, store, fake, 
     write_config(brand, autonomy={"publish_post": "auto"})
     publisher.cfg = brand.config
     assert [r for _, r in publisher.publish_due()] == ["published"]
+
+
+def test_ready_means_built_not_cleared_to_publish(brand, store, fake, publisher):
+    make_post(brand, status="ready")
+    make_post(brand, number="002", slug="meta-ready", status="", meta={"status": "ready"})
+    assert publisher.ingest() == []
+    assert fake.media == {} or len(fake.media) == 0
+
+
+def test_meta_status_approved_is_ingested(brand, store, publisher):
+    make_post(brand, status="", meta={"status": "approved"})
+    assert [a for _, a in publisher.ingest()] == ["ingested"]
+
+
+def _with_publish_column(brand, value):
+    idx = next(brand.content_dir.glob("*/_index.md"))
+    lines = idx.read_text().splitlines()
+    lines[0] += " Publish |"
+    lines[1] += "---|"
+    lines[2] += f" {value} |"
+    idx.write_text("\n".join(lines) + "\n")
+
+
+def test_future_publish_date_waits_then_publishes(brand, store, fake, publisher, monkeypatch):
+    from datetime import timedelta
+    import instagram_os.publisher as pubmod
+    from instagram_os.store import utcnow
+    make_post(brand)
+    _with_publish_column(brand, (utcnow() + timedelta(days=2)).strftime("%Y-%m-%d"))
+    run_pipeline(publisher)
+    assert len(fake.media) == 0
+    assert store.publications()[0]["status"] == "QUEUED"
+    later = utcnow() + timedelta(days=3)
+    monkeypatch.setattr(pubmod, "utcnow", lambda: later)
+    publisher.publish_due()
+    assert len(fake.media) == 1
+
+
+def test_scheduled_posts_go_before_unscheduled_ones(brand, store, fake, publisher):
+    from datetime import timedelta
+    from instagram_os.store import utcnow
+    write_config(brand, publishing={"max_posts_per_day": 1})
+    publisher.cfg = brand.config
+    make_post(brand, number="001", slug="unscheduled", caption="First in the calendar.")
+    make_post(brand, number="002", slug="scheduled", caption="Scheduled for yesterday.")
+    idx = next(brand.content_dir.glob("*/_index.md"))
+    lines = idx.read_text().splitlines()
+    lines[0] += " Publish |"; lines[1] += "---|"; lines[2] += " |"
+    lines[3] += f" {(utcnow() - timedelta(days=1)).strftime('%Y-%m-%d')} |"
+    idx.write_text("\n".join(lines) + "\n")
+    run_pipeline(publisher)
+    [published] = store.publications([S.PUBLISHED])
+    assert published["content_id"].endswith("002-scheduled")
+
+
+def test_bad_publish_date_blocks_instead_of_publishing_now(brand, store, fake, publisher):
+    make_post(brand)
+    _with_publish_column(brand, "next tuesday")
+    run_pipeline(publisher)
+    assert len(fake.media) == 0
+    pub = store.publications()[0]
+    assert pub["status"] == "REQUIRES_REVIEW" and "publish date" in pub["status_reason"]
+
+
+def test_unapproving_a_queued_post_stops_it(brand, store, fake, publisher):
+    write_config(brand, autonomy={"publish_post": "approval"})
+    folder = make_post(brand)
+    publisher.ingest(); publisher.validate_pending()
+    publisher.approve(f"{folder.parent.name}/{folder.name}")
+    idx = next(brand.content_dir.glob("*/_index.md"))
+    idx.write_text(idx.read_text().replace("approved", "ready"))
+    publisher.publish_due()
+    assert len(fake.media) == 0
+    assert store.publications()[0]["status"] == "REQUIRES_REVIEW"
+    # Flipping it back to approved puts it through validation again.
+    idx.write_text(idx.read_text().replace("| ready |", "| approved |"))
+    assert ("re-approved" in [a for _, a in publisher.ingest()])

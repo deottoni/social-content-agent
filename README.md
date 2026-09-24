@@ -93,12 +93,18 @@ and every write is simulated and logged.
 ## 8. Running the agent
 
 ```bash
-export PATH="$PWD/bin:$PATH"
-instagram --brand presence-project init          # config.yaml + facts.md in the brand folder
-instagram --brand presence-project auth-check    # read-only token/account check
-instagram --brand presence-project status        # boundaries, queue, pending human actions
-instagram --brand presence-project daily-run     # token-check, publish, comments, opportunities, analytics
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+alias instagram="$PWD/.venv/bin/python $PWD/bin/instagram"
+instagram --brand <slug> init          # config.yaml + facts.md in the brand folder
+instagram --brand <slug> auth-check    # read-only token/account check
+instagram --brand <slug> status        # boundaries, queue, pending human actions
+instagram --brand <slug> daily-run     # token-check, publish, comments, opportunities, analytics
+instagram --brand <slug> tick          # run whatever is due now (what the launchd runner calls)
 ```
+
+Only posts whose `_index.md` Status is `approved` are ever published (`ready` means built,
+not cleared); an optional Publish column schedules them. See
+[setup §7](docs/instagram-setup.md#7-mark-posts-for-publishing).
 
 | Command | What it does |
 |---|---|
@@ -157,13 +163,13 @@ account insights per run. Joined to topic, format, hook, CTA, caption, and publi
 ## 14. Human approval workflow
 
 ```bash
-instagram --brand presence-project status             # what's waiting on you
-instagram --brand presence-project queue --status VALIDATED,REQUIRES_REVIEW
-instagram --brand presence-project publish approve 2026-09/004-five-ways
-instagram --brand presence-project comments list
-instagram --brand presence-project comments approve 17912345 --text "Edited reply"
-instagram --brand presence-project opportunities list
-instagram --brand presence-project opportunities complete 12 --note "commented"
+instagram --brand <slug> status             # what's waiting on you
+instagram --brand <slug> queue --status VALIDATED,REQUIRES_REVIEW
+instagram --brand <slug> publish approve 2026-09/004-five-ways
+instagram --brand <slug> comments list
+instagram --brand <slug> comments approve 17912345 --text "Edited reply"
+instagram --brand <slug> opportunities list
+instagram --brand <slug> opportunities complete 12 --note "commented"
 ```
 
 Idea-board clusters are still approved in Claude Code, as before.
@@ -179,13 +185,14 @@ Full list: [`docs/instagram-api-limitations.md`](docs/instagram-api-limitations.
 ## Status
 
 - Content brain: in use; the maintainer's own accounts are the first test brand.
-- Instagram operating layer: implemented and tested against a fake API. Not yet run against a
-  real account — first rollout is `presence-project` (dry run → approval → selective autonomy),
-  then other brands. See [setup §7](docs/instagram-setup.md#7-enable-the-brand-presence-project).
+- Instagram operating layer: implemented and tested against a fake API. First rollout is on the
+  maintainer's own brand (dry run → approval → selective autonomy), then other brands. See
+  [setup §8](docs/instagram-setup.md#8-enable-the-brand).
 
 ## Open items
 
-- [ ] Run `presence-project` in dry run against the real account for a week; then live with approvals.
-- [ ] Decide media hosting for `presence-project` (`command` upload vs `url_prefix` sync).
+- [ ] First brand: a week of dry run against the real account, then live with approvals.
+- [ ] Automated content generation into `approved` (the `generate` hook) for brands that opt in.
+- [ ] Replies to DMs (24 h window) and to @mentions — both supported by the API, not built yet.
 - [ ] Reels: decide how `reel.mp4` gets produced (the pipeline stops at a beat sheet).
 - [ ] Consider comment webhooks (needs a public endpoint) if 30-minute polling is too slow.

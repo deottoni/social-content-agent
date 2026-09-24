@@ -11,7 +11,7 @@ images and never edits brand files.
                  social-trend-scan ◄──────── recommendations/latest.md, plan-brief.md
                           │   (human approves clusters)                  ▲
                  social-content-build / remix                            │
-                          │  post folder + meta.md, _index.md = ready    │
+                          │  post folder + meta.md, _index.md = approved │
         ┌─────────────────┴──────────────┐                               │
         ▼                                ▼                               │
    CREATE (ingest)                   OBSERVE                             │
@@ -46,7 +46,7 @@ Cross-cutting: `config.py` (brand resolution, config, secrets), `store.py` (SQLi
 | `config.py` | Resolves a slug via `.claude/brands.local.json`; deep-merges `<brand>/instagram/config.yaml` over `defaults.yaml`; env overrides; reads secrets from env only; `LOCKED_HUMAN_ACTIONS` |
 | `client.py` | `InstagramClient` interface. `GraphInstagramClient` (HTTP, retries with capped exponential backoff for transient errors only, typed errors: `AuthError`, `RateLimitError`, `PermissionDenied`, `TransientError`, `MediaError`, `UnsupportedOperation`), `DryRunClient` (reads pass through, writes simulated), `build_client` |
 | `fake.py` | In-memory client with failure injection; used by all tests and by credential-less dry runs |
-| `content.py` | Reads the existing post-folder convention; `ready`/`posted` from `_index.md` / `meta.md`; detects image / carousel / Reel; derives hook and CTA |
+| `content.py` | Reads the existing post-folder convention; `approved`/`posted` + optional Publish date from `_index.md` / `meta.md` (`ready` = built, never ingested); detects image / carousel / Reel; derives hook and CTA |
 | `validation.py` | JPEG conversion, aspect/width/size, carousel rules, video checks, caption limits, placeholders, markdown leftovers, blocked terms, reviewer `review: flagged` |
 | `media_host.py` | Local file → public HTTPS URL (`none`, `url_prefix`, `command`) |
 | `policy.py` | Quiet hours (brand timezone), daily/weekly caps, spacing, autonomy table |
@@ -56,7 +56,7 @@ Cross-cutting: `config.py` (brand resolution, config, secrets), `store.py` (SQLi
 | `opportunities.py` | Watchlist → scored human opportunities |
 | `analytics.py` | Metric snapshots for published media and the account |
 | `learning.py` | Weekly review → recommendations file |
-| `scheduler.py` | Jobs, locks, job records, planning brief, token check, crontab output |
+| `scheduler.py` | Jobs, locks, job records, planning brief, token check, `tick` (runs whatever came due since the last wake — for launchd on a laptop that sleeps), crontab and launchd output |
 | `store.py` | SQLite schema and state transitions |
 | `activity.py` | Activity log (SQLite + readable `activity.log`), secret redaction |
 
@@ -92,6 +92,8 @@ Every transition is validated (`models.py`) and recorded in `publication_events`
 2. Posts marked `posted` anywhere are never ingested; after a real publish the `_index.md`
    Status cell is flipped to `posted`.
 3. Identical caption + media already published under another folder → `REQUIRES_REVIEW`.
+   Only `approved` rows are ingested, and the status is re-read right before publishing — a
+   post flipped back to `ready` after it was queued goes to `REQUIRES_REVIEW` instead.
 4. `QUEUED → PUBLISHING` is an atomic compare-and-set (two runners can't both claim a post);
    jobs are also lock-protected.
 5. `media_publish` is never auto-retried. If it errors, recent media are checked for the

@@ -10,7 +10,8 @@ It goes from "what should we post about" to "here is the finished copy, hashtags
 
 Publishing exists in exactly one place: the **Instagram operating layer** (`instagram_os/`, `bin/instagram`), a separate Python layer that wraps this pipeline and only talks to the official Instagram Platform API. It is **opt-in per brand** (`<brand-path>/instagram/config.yaml` with `enabled: true`), defaults to `dry_run` and to human approval for publishing, and consumes finished post folders exactly as Stage 4 writes them. Rules for working on it:
 - Never add browser automation or any action the official API does not support (liking, commenting on third-party posts, following, cold DMs). Those are surfaced as human opportunities, never automated — `config.py`'s `LOCKED_HUMAN_ACTIONS` enforces this.
-- Never hard-code a brand, token, or account ID. Secrets come only from environment variables; state lives in the brand folder (`<brand-path>/instagram/`), never in this repo.
+- Never hard-code a brand, token, or account ID, and never name a real brand in this repo's code or docs (use `<slug>`). Three places, never mixed: generic code/defaults/templates in this repo; a brand's config, `facts.md`, state and logs in `<brand-path>/instagram/`; secrets only in `~/.config/instagram-os/<slug>.env` (or a runner's secret store) — never in either folder.
+- Only posts whose `_index.md` Status (or `meta.md` `status:`) is `approved` are ever published. `ready` means built, not cleared to publish. Skills write new posts as `ready`; never set `approved` on a user's behalf.
 - The learning loop writes recommendations to `<brand-path>/instagram/recommendations/`; it never edits a brand file. Brand files stay authoritative.
 - Tests use the fake client only (`python3 -m pytest tests`); never point a test at a real account.
 - No other platform (TikTok, YouTube) gets a publishing integration without an explicit new request.
@@ -22,7 +23,7 @@ See `ARCHITECTURE.md` and `docs/instagram-*.md`.
 2. **Trend scan / ideation** (`social-trend-scan` skill) → reads the brand's `mode` (see below) to decide how much live research to do, clusters findings into 3–6 candidate themes, writes an idea board to `<brand-path>/idea-boards/`.
 3. **Human approval gate.** Present the idea board and stop. Do not proceed to content build until the user has explicitly said which cluster(s) to pursue (and any redirection). This gate is the whole point of the system — never auto-approve, never skip it "to save a round trip." The Instagram layer's `plan` job respects this too: it can trigger `social-trend-scan`, but picking clusters stays human.
 4. **Content build** (`social-content-build` skill, only for approved clusters) → produces per-platform captions, hashtags, image-gen prompts, and (for short-form platforms) a beat sheet, written to `<brand-path>/content-packages/`.
-5. **Operate (optional, Instagram only)** — for brands that enabled `instagram_os/`: a post marked `ready` in `_index.md` is validated, queued (auto or after approval), published, monitored for comments, measured, and fed back as recommendations into the next Stage 2 run.
+5. **Operate (optional, Instagram only)** — for brands that enabled `instagram_os/`: a post marked `approved` in `_index.md` (optionally with a Publish date) is validated, queued, published, monitored for comments, measured, and fed back as recommendations into the next Stage 2 run.
 
 ## Mode drives Stage 2's depth
 

@@ -14,10 +14,10 @@ import time
 from datetime import timedelta
 
 from .client import (AuthError, InstagramAPIError, MediaError, RateLimitError, TransientError)
-from .content import discover_ready_posts, load_post, mark_posted_in_index
+from .content import INGEST_STATUSES, discover_ready_posts, load_post_with_index as load_post, mark_posted_in_index
 from .media_host import MediaHostError, MediaNotReachable
 from .models import ContentType, PublicationStatus as S
-from .policy import publish_blockers
+from .policy import parse_publish_at, publish_blockers
 from .store import iso, parse_iso, utcnow
 from .validation import validate_artifact
 
@@ -39,26 +39,40 @@ class Publisher:
 
     # ------------------------------------------------------------------ ingest
     def ingest(self):
-        """Pick up posts a human marked ready. Returns list of (content_id, action)."""
+        """Pick up posts marked `approved`. Returns list of (content_id, action)."""
         results = []
         posts = discover_ready_posts(self.ctx.content_dir, self.cfg["publishing"]["ingest_months_back"])
         for art in posts:
             existing = self.store.get_publication(art.content_id)
+            try:
+                publish_at = parse_publish_at(art.publish_at, self.cfg)
+            except ValueError as e:
+                art.problems.append(str(e))
+                publish_at = None
             h = art.content_hash
             fields = dict(content_hash=h, content_type=art.content_type.value, caption=art.caption,
                           asset_paths=[str(p) for p in art.assets], topic=art.topic,
                           pillar=art.meta.get("pillar"), hook=art.hook, cta=art.cta,
                           format=art.meta.get("format") or art.content_type.value.lower(),
-                          origin=art.meta.get("origin", "pipeline"))
+                          origin=art.meta.get("origin", "pipeline"),
+                          publish_at=iso(publish_at) if publish_at else None)
             if existing is None:
                 pub_id = self.store.insert_publication(dict(fields, content_id=art.content_id))
                 self.log.record("CONTENT", f"Ingested {art.content_type.value.lower()} “{art.content_id}”",
-                                reason="marked ready in content-packages", tool="content.ingest", ref=art.content_id)
+                                reason="marked approved in content-packages", tool="content.ingest", ref=art.content_id)
                 self._flag_duplicate_content(pub_id, h)
                 results.append((art.content_id, "ingested"))
             elif existing["status"] in (S.PUBLISHED.value, S.PUBLISHING.value):
                 continue
-            elif existing["content_hash"] != h:
+            elif existing["content_hash"] == h:
+                if existing["publish_at"] != fields["publish_at"]:  # rescheduling needs no re-approval
+                    self.store.update_publication(existing["id"], publish_at=fields["publish_at"])
+                    results.append((art.content_id, "rescheduled"))
+                if (existing["status"] == S.REQUIRES_REVIEW.value
+                        and (existing["status_reason"] or "").startswith("status is now")):
+                    self.store.transition_publication(existing["id"], S.DRAFT, "approved again")
+                    results.append((art.content_id, "re-approved"))
+            else:
                 fields["asset_paths"] = json.dumps(fields["asset_paths"])
                 self.store.update_publication(existing["id"], **fields)
                 if existing["status"] != S.DRAFT.value:
@@ -84,13 +98,20 @@ class Publisher:
             out.append(self.validate(pub))
         return out
 
+    def _validate(self, art):
+        try:
+            parse_publish_at(art.publish_at, self.cfg)
+        except ValueError as e:
+            art.problems.append(str(e))  # never fall back to "publish now" on a typo'd date
+        return validate_artifact(art, self.cfg)
+
     def validate(self, pub):
         art = load_post(self._folder(pub))
         if art.content_hash != pub["content_hash"]:
             self.ingest()
             pub = self.store.get_publication(pub_id=pub["id"])
             art = load_post(self._folder(pub))
-        result = validate_artifact(art, self.cfg)
+        result = self._validate(art)
         if not result.ok:
             reason = "; ".join(result.errors)
             self.store.transition_publication(pub["id"], S.REQUIRES_REVIEW, reason)
@@ -145,9 +166,15 @@ class Publisher:
                                 approval_required=False, ref=pub["content_id"])
         self.reconcile_stuck()
         done = []
-        for pub in self.store.publications([S.QUEUED]):
+        now = utcnow()
+        # Scheduled posts in date order first, then unscheduled ones in calendar order.
+        queue = sorted(self.store.publications([S.QUEUED]),
+                       key=lambda p: (p["publish_at"] is None, p["publish_at"] or "", p["content_id"]))
+        for pub in queue:
             if limit is not None and len(done) >= limit:
                 break
+            if pub["publish_at"] and parse_iso(pub["publish_at"]) > now:
+                continue  # not due yet; a later-scheduled post can't be due either, but unscheduled ones can
             blockers = publish_blockers(self.cfg, self.store, pub["content_type"])
             if blockers:
                 self.log.record("PUBLISH", f"Holding “{pub['content_id']}”", reason="; ".join(blockers),
@@ -178,10 +205,14 @@ class Publisher:
         try:
             self._check_quota()
             art = load_post(self._folder(pub))
+            if art.index_status not in INGEST_STATUSES:
+                self.store.transition_publication(pub["id"], S.REQUIRES_REVIEW,
+                                                  f"status is now {art.index_status or 'unset'}, not approved")
+                return "no longer approved"
             if art.content_hash != pub["content_hash"]:
                 self.store.transition_publication(pub["id"], S.DRAFT, "content changed after approval")
                 return "content changed — back to DRAFT"
-            result = validate_artifact(art, self.cfg)
+            result = self._validate(art)
             if not result.ok:
                 self.store.transition_publication(pub["id"], S.REQUIRES_REVIEW, "; ".join(result.errors))
                 return "failed re-validation"

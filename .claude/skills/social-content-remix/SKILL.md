@@ -91,7 +91,8 @@ folder tree:
   and analytics — same fields `social-content-build` writes.)
 - `<brand-path>/content-packages/<YYYY-MM>/_index.md` — add this post's row as usual,
   plus an **Origin** column (`pipeline` / `remix`) if the table doesn't have one yet.
-  One calendar view for everything ready to post, not a second competing index.
+  One calendar view for everything ready to post, not a second competing index. Status
+  starts at `ready`, never `approved` (see `social-content-build` for what `approved` means).
 
 ## Step 5 — present in-chat
 

@@ -127,6 +127,18 @@ opportunities:
   # Accounts you have a relationship with (0..1). Anything unlisted scores 0.
   relationships: {}
 
+# Reference harvesting (`instagram harvest`, used by the reference-scan skill). Read-only;
+# needs api.login_type: facebook, and runs even while `enabled` is false.
+# The account lists are brand data: set them in the brand's own config.yaml, never here.
+research:
+  accounts: []                  # Creator/Business usernames to learn from
+  shortlists: {}                # named subsets, e.g. core: [a, b]; `all` = accounts + every shortlist
+  hashtags: []                  # without '#'; shares the 30-unique-per-7-days budget with opportunities
+  per_account: 20               # most recent posts read per account
+  per_hashtag: 20               # top posts read per hashtag
+  include_reels: false          # v1 never downloads video; true keeps the caption + metadata only
+  min_outperformance: 0         # skip posts below this multiple of their account's median engagement
+
 analytics:
   media_lookback_days: 30
   # Minimum hours between two snapshots of the same media.

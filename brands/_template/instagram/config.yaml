@@ -44,5 +44,12 @@ opportunities:
     topics: []
   relationships: {}        # username: 0..1
 
+# Reference scan (the reference-scan skill / `instagram harvest`). Needs login_type: facebook.
+# Per-account copy/reject notes go in <brand-path>/references/notes.md, not here.
+research:
+  accounts: []             # professional accounts to learn from
+  shortlists: {}           # e.g. core: [account_a, account_b]
+  hashtags: []
+
 reasoner:
   provider: anthropic      # anthropic | rules

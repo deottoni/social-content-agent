@@ -5,6 +5,7 @@
 (or set INSTAGRAM_BRAND). Run `instagram --help` for the list.
 """
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -15,6 +16,7 @@ from .models import OpportunityStatus
 from .policy import boundaries_table
 from .scheduler import JOBS, Runtime, crontab_lines, launchd_plist, run_job, tick
 
+RESEARCH_COMMANDS = {"harvest", "references", "auth-check"}  # read-only, ok before `enabled`
 TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "brands" / "_template" / "instagram"
 
 
@@ -186,6 +188,54 @@ def cmd_opportunities(rt, args):
         print("opportunities: %s — %s" % run_job(rt, "opportunities"))
 
 
+def cmd_harvest(rt, args):
+    from .research import Harvester
+    if rt._client is None and not rt.ctx.secrets.has_credentials:
+        raise ValueError(f"harvest reads the live API: set INSTAGRAM_ACCESS_TOKEN / INSTAGRAM_ACCOUNT_ID in "
+                         f"{env_file_path(rt.ctx.slug)} (docs/instagram-setup.md)")
+    if rt.ctx.config["api"]["login_type"] != "facebook":
+        raise ValueError("harvest needs Business Discovery / Hashtag Search: set api.login_type: facebook "
+                         "(a Facebook Page linked to the Instagram account)")
+    h = Harvester(rt.ctx, rt.store, rt.client, rt.activity)
+    accounts = [a.strip().lstrip("@") for a in args.account.split(",")] if args.account else \
+        h.accounts_for(args.shortlist)
+    if args.hashtag:
+        hashtags = [t.strip() for t in args.hashtag.split(",")]
+    else:
+        hashtags = [] if args.no_hashtags or args.account else list(h.cfg.get("hashtags") or [])
+    if not accounts and not hashtags:
+        raise ValueError("nothing to harvest: add research.accounts / shortlists / hashtags to config.yaml")
+    report = h.harvest(accounts, hashtags, per_account=args.per_account, per_hashtag=args.per_hashtag)
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return report
+    _print_table([(r["source"], r["status"], r["fetched"], r["new"], r["already"], r["reels_skipped"],
+                   r["errors"], r["note"][:70]) for r in report["sources"]],
+                 ["source", "status", "fetched", "new", "had", "reels", "errors", "note"])
+    if report["stopped"]:
+        print(f"\nSTOPPED: {report['stopped']}")
+    print(f"\n{len(report['new'])} new reference post(s) in {h.library.root}")
+    _print_table([(e["outperformance"] if e["outperformance"] is not None else "-", e["source"], e["slides"],
+                   e["permalink"] or "") for e in report["new"][:25]], ["x median", "source", "imgs", "link"])
+    return report
+
+
+def cmd_references(rt, args):
+    from .research import ReferenceLibrary
+    lib = ReferenceLibrary(rt.ctx.path)
+    if args.mark_analyzed:
+        done = lib.mark_analyzed([m.strip() for m in args.mark_analyzed.split(",") if m.strip()])
+        print(f"marked {len(done)} reference(s) analyzed")
+        return
+    rows = lib.entries(unanalyzed=args.unanalyzed)[: args.limit]
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return
+    _print_table([(e["media_id"], e["outperformance"] if e["outperformance"] is not None else "-", e["source"],
+                   e["slides"], "yes" if e.get("analyzed_at") else "no", e["folder"]) for e in rows],
+                 ["media id", "x median", "source", "imgs", "analyzed", "folder"])
+
+
 def cmd_log(rt, args):
     for r in reversed(rt.activity.recent(args.limit, args.category)):
         extra = f"  [{r['error']}]" if r["error"] else ""
@@ -236,6 +286,19 @@ def build_parser():
     sub.add_parser("tick", help="run every scheduled job that came due since the last tick (for launchd)")
     sc = sub.add_parser("schedule", help="print crontab lines (or a launchd plist) for this brand")
     sc.add_argument("--launchd", action="store_true", help="print a macOS LaunchAgent plist that runs `tick`")
+    hv = sub.add_parser("harvest", help="download reference posts from research accounts/hashtags (read-only)")
+    hv.add_argument("--shortlist", help="a research.shortlists name; default `all`")
+    hv.add_argument("--account", help="comma-separated usernames instead of a shortlist")
+    hv.add_argument("--hashtag", help="comma-separated hashtags instead of research.hashtags")
+    hv.add_argument("--no-hashtags", action="store_true", help="skip research.hashtags this run")
+    hv.add_argument("--per-account", type=int)
+    hv.add_argument("--per-hashtag", type=int)
+    hv.add_argument("--json", action="store_true")
+    rf = sub.add_parser("references", help="list harvested references (or mark them analyzed)")
+    rf.add_argument("--unanalyzed", action="store_true", help="only references no analyst pass has read")
+    rf.add_argument("--mark-analyzed", metavar="IDS", help="comma-separated media ids")
+    rf.add_argument("--limit", type=int, default=500)
+    rf.add_argument("--json", action="store_true")
     lg = sub.add_parser("log", help="show the activity log")
     lg.add_argument("--limit", type=int, default=40)
     lg.add_argument("--category")
@@ -252,7 +315,9 @@ def main(argv=None):
         if args.command == "init":
             cmd_init(args)
             return 0
-        ctx = load_brand(args.brand, registry_path=args.registry)
+        # Reading references never publishes, so it works before the brand enables the layer.
+        ctx = load_brand(args.brand, registry_path=args.registry,
+                         require_enabled=args.command not in RESEARCH_COMMANDS)
     except ConfigError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -281,6 +346,11 @@ def main(argv=None):
             return 0 if all(st in ("OK", "SKIPPED") for _, st, _ in ran) else 1
         elif args.command == "log":
             cmd_log(rt, args)
+        elif args.command == "harvest":
+            report = cmd_harvest(rt, args)
+            return 1 if report["stopped"] else 0
+        elif args.command == "references":
+            cmd_references(rt, args)
         elif args.command in JOBS:
             status, summary = run_job(rt, args.command)
             print(f"{args.command}: {status} — {summary}")

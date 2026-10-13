@@ -1,6 +1,6 @@
 ---
 name: social-content-build
-description: Stage 4 of the social content pipeline — takes a brand and one or more user-approved clusters from an idea board and produces finished, per-platform captions, hashtags, and image-gen prompts. Only run this after the user has explicitly approved cluster(s) from a social-trend-scan idea board. Trigger on "build the content for <brand> cluster <N>", "write the posts for <theme>".
+description: Stage 4 of the social content pipeline — takes a brand and one or more user-approved clusters from an idea board and produces finished, per-platform captions, hashtags, and image-gen prompts. Also builds approved post numbers from a reference-scan post plan. Only run this after the user has explicitly approved cluster(s) from a social-trend-scan idea board, or post numbers from a reference plan. Trigger on "build the content for <brand> cluster <N>", "write the posts for <theme>", "build posts 3, 7 and 12 from the reference plan".
 ---
 
 Produce a finished, copy-paste-ready content package for one or more already-approved clusters. Never invent or substitute a cluster the user didn't approve — if it's unclear which cluster(s) they mean, ask rather than guessing from the most recent idea board.
@@ -10,6 +10,15 @@ Produce a finished, copy-paste-ready content package for one or more already-app
 Resolve `<slug>`'s folder from `.claude/brands.local.json` at this repo's root (find the repo root with `git rev-parse --show-toplevel` if not already there). If the file doesn't exist or doesn't list `<slug>`, tell the user this brand hasn't been onboarded here yet and offer to run `brand-onboarding` first.
 
 Read `<brand-path>/social-content-system.md` and `<brand-path>/visual-design-system.md`. Read the relevant idea board from `<brand-path>/idea-boards/` to get the approved cluster's theme name, rationale, and per-channel angle sketch.
+
+### From a reference plan (post numbers)
+
+When the user approves **post numbers** from a `reference-scan` plan (`<brand-path>/idea-boards/<date>-reference-plan.md`), build exactly those posts — never extra ones from the same cluster. If it's unclear which plan they mean, use the newest `*-reference-plan.md` only if it's the one just presented; otherwise ask.
+
+- Each approved proposal is its own post: its working title, format (single or carousel with N slides), draft hook, angle, and pillar stand in for the cluster's angle sketch.
+- **Group the approved posts by cluster and run Step 1 once per cluster, not once per post** — hand each agent all of that cluster's approved proposals in one call and ask for one output block per post number.
+- Hand the agents the proposal's source permalinks and, for each, the matching `reference-analyst` notes from `<brand-path>/references/analysis/` (search for the permalink). Don't hand them the reference images or original captions. The references are inspiration only: extract the idea and structure, never clone text or images. Tell `brand-consistency-reviewer` to flag anything that reads as close to a source.
+- Respect `<brand-path>/references/notes.md`: nothing rejected there (tone, aesthetic, framing) comes back in through the build.
 
 ## Step 1 — content agents
 
@@ -41,6 +50,7 @@ One folder per post, grouped by month — this is the standing convention for ev
   review: <clean | flagged>   (flagged = brand-consistency-reviewer left a human-judgment note)
   variant: <colorway to publish, only when several image-<variant>.png exist>
   ```
+  Posts built from a reference plan write `origin: reference` instead of `pipeline`, plus `plan: <idea-boards file name> #<post number>` and one `source: <permalink>` line per inspiring reference. The **Origin** column in `_index.md` then says `reference`.
   For a Reel, the finished video goes in the folder as `reel.mp4` (optional `cover.jpg`); until the video exists the post stays unpublishable, which is expected — this project generates beat sheets, not video.
 - `<brand-path>/content-packages/<YYYY-MM>/_index.md` — one scannable table for the whole month: post number, name, format, colorway, pillar, an **Origin** column (`pipeline` / `remix` — see `social-content-remix` for the latter) if any post in the table came from a remix, and a **Status** column (`draft` / `ready` / `approved` / `posted`). New posts are written as `ready` (built, paste-ready) — never `approved`: `approved` means "cleared to publish" and is only set by a human (or, later, by an automation step the brand has explicitly opted into). For brands running the Instagram operating layer (`instagram_os/`, opt-in per brand), `approved` is what makes the publisher pick the post up, an optional **Publish** column (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM`) schedules it, and the layer flips the cell to `posted` itself after a real publish; `ready` is never published. For everyone else, the human still sets `posted` by hand. This is the calendar view — read this before opening any post folder, don't rebuild it by listing directories.
 

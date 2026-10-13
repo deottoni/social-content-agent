@@ -18,6 +18,10 @@ from .activity import redact
 HOSTS = {"instagram": "https://graph.instagram.com", "facebook": "https://graph.facebook.com"}
 
 MEDIA_FIELDS = "id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count"
+# Reference harvesting (instagram_os/research.py) needs the image URLs too. They expire, so
+# the harvester downloads them immediately.
+REFERENCE_MEDIA_FIELDS = ("id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,"
+                          "children{media_url,media_type}")
 COMMENT_FIELDS = "id,text,timestamp,username,from,parent_id,like_count,replies{id,text,timestamp,username,from}"
 
 # Current media insights metrics (impressions/plays were retired in favour of `views`).
@@ -130,9 +134,10 @@ class InstagramClient:
     def get_media_insights(self, media_id, product_type="FEED"): raise NotImplementedError
     def get_account_insights(self, since=None, until=None): raise NotImplementedError
     # discovery (Facebook Login only)
-    def business_discovery(self, username, media_limit=5): raise NotImplementedError
+    def business_discovery(self, username, media_limit=5, media_fields=None): raise NotImplementedError
     def hashtag_search(self, hashtag): raise NotImplementedError
     def hashtag_recent_media(self, hashtag_id, limit=10): raise NotImplementedError
+    def hashtag_top_media(self, hashtag_id, limit=25, media_fields=None): raise NotImplementedError
     # token lifecycle
     def refresh_token(self): raise NotImplementedError
     def debug_token(self): raise NotImplementedError
@@ -269,10 +274,11 @@ class GraphInstagramClient(InstagramClient):
         return _flatten_insights(body)
 
     # ---- discovery (Facebook Login only) ----
-    def business_discovery(self, username, media_limit=5):
+    def business_discovery(self, username, media_limit=5, media_fields=None):
         self._require_facebook("Business Discovery")
+        media_fields = media_fields or "id,caption,like_count,comments_count,permalink,timestamp,media_type"
         fields = (f"business_discovery.username({username}){{username,name,followers_count,media_count,"
-                  f"media.limit({media_limit}){{id,caption,like_count,comments_count,permalink,timestamp,media_type}}}}")
+                  f"media.limit({media_limit}){{{media_fields}}}}}")
         return self._request("GET", self.account_id, {"fields": fields}).get("business_discovery", {})
 
     def hashtag_search(self, hashtag):
@@ -285,6 +291,12 @@ class GraphInstagramClient(InstagramClient):
         return self._request("GET", f"{hashtag_id}/recent_media", {
             "user_id": self.account_id, "limit": limit,
             "fields": "id,caption,permalink,timestamp,like_count,comments_count,media_type"}).get("data", [])
+
+    def hashtag_top_media(self, hashtag_id, limit=25, media_fields=None):
+        self._require_facebook("Hashtag Search")
+        return self._request("GET", f"{hashtag_id}/top_media", {
+            "user_id": self.account_id, "limit": limit,
+            "fields": media_fields or REFERENCE_MEDIA_FIELDS}).get("data", [])
 
     # ---- token lifecycle ----
     def refresh_token(self):
@@ -342,9 +354,12 @@ class DryRunClient(InstagramClient):
         return {} if str(media_id).startswith("dryrun-") else self.reader.get_media_insights(media_id, product_type)
     def get_account_insights(self, since=None, until=None): return self.reader.get_account_insights(since, until)
     def get_publishing_limit(self): return self.reader.get_publishing_limit()
-    def business_discovery(self, username, media_limit=5): return self.reader.business_discovery(username, media_limit)
+    def business_discovery(self, username, media_limit=5, media_fields=None):
+        return self.reader.business_discovery(username, media_limit, media_fields)
     def hashtag_search(self, hashtag): return self.reader.hashtag_search(hashtag)
     def hashtag_recent_media(self, hashtag_id, limit=10): return self.reader.hashtag_recent_media(hashtag_id, limit)
+    def hashtag_top_media(self, hashtag_id, limit=25, media_fields=None):
+        return self.reader.hashtag_top_media(hashtag_id, limit, media_fields)
     def debug_token(self): return self.reader.debug_token()
 
     # simulated writes

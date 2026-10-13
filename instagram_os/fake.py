@@ -1,5 +1,6 @@
 """In-memory Instagram client for tests and credential-less dry runs. Never touches the network."""
 import itertools
+from datetime import datetime, timezone
 
 from .client import InstagramClient, MediaError, RateLimitError, UnsupportedOperation
 
@@ -93,7 +94,8 @@ class FakeInstagramClient(InstagramClient):
         media_type = {"IMAGE": "IMAGE", "REELS": "VIDEO", "CAROUSEL": "CAROUSEL_ALBUM"}[c["kind"]]
         self.media[mid] = {"id": mid, "caption": c["payload"].get("caption"), "media_type": media_type,
                            "media_product_type": product, "permalink": f"https://www.instagram.com/p/{mid}/",
-                           "timestamp": f"2026-09-23T{len(self.media):02d}:00:00+0000",
+                           # Real "now", so time-window checks (publish reconciliation) keep working.
+                           "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+0000"),
                            "like_count": 0, "comments_count": 0}
         return mid
 
@@ -145,10 +147,13 @@ class FakeInstagramClient(InstagramClient):
         if self.login_type != "facebook":
             raise UnsupportedOperation(f"{feature} requires Facebook Login")
 
-    def business_discovery(self, username, media_limit=5):
-        self._hit("business_discovery", username)
+    def business_discovery(self, username, media_limit=5, media_fields=None):
+        self._hit("business_discovery", username, media_fields)
         self._require_facebook("Business Discovery")
-        return self.discovery.get(username, {})
+        bd = self.discovery.get(username, {})
+        if "media" in bd:
+            bd = dict(bd, media={"data": bd["media"].get("data", [])[:media_limit]})
+        return bd
 
     def hashtag_search(self, hashtag):
         self._hit("hashtag_search", hashtag)
@@ -157,6 +162,14 @@ class FakeInstagramClient(InstagramClient):
 
     def hashtag_recent_media(self, hashtag_id, limit=10):
         self._hit("hashtag_recent_media", hashtag_id)
+        for hid, media in self.hashtags.values():
+            if hid == hashtag_id:
+                return media[:limit]
+        return []
+
+    def hashtag_top_media(self, hashtag_id, limit=25, media_fields=None):
+        self._hit("hashtag_top_media", hashtag_id)
+        self._require_facebook("Hashtag Search")
         for hid, media in self.hashtags.values():
             if hid == hashtag_id:
                 return media[:limit]

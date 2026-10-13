@@ -16,8 +16,8 @@ identical for every brand; `<slug>` below is the brand's key in `.claude/brands.
 
 - The account must be a **professional account** (Business or Creator). Personal accounts
   have no API access at all. Switch in the Instagram app: *Settings → Account type and tools*.
-- For **Facebook Login** (needed only for automatic watchlist monitoring) the account must
-  be linked to a **Facebook Page** you manage.
+- For **Facebook Login** (needed for watchlist monitoring and the reference scan's
+  `harvest`) the account must be linked to a **Facebook Page** you manage.
 - Keep two-factor authentication on the Instagram and Meta accounts; the token you create
   can post as the brand.
 
@@ -44,8 +44,11 @@ identical for every brand; `<slug>` below is the brand's key in `.claude/brands.
 | Publish | `instagram_business_content_publish` | `instagram_content_publish` |
 | Read / reply / hide comments | `instagram_business_manage_comments` | `instagram_manage_comments` |
 | Insights | `instagram_business_manage_insights` | `instagram_manage_insights` |
-| Business Discovery | — (unavailable) | `instagram_basic` + `pages_read_engagement` |
-| Hashtag Search | — (unavailable) | `instagram_basic` + *Instagram Public Content Access* feature |
+| Business Discovery | — (unavailable) | `instagram_basic`, `instagram_manage_insights`, `pages_read_engagement` (+ `ads_read` if your Page role comes through a business portfolio) |
+| Hashtag Search | — (unavailable) | `instagram_basic` + *Instagram Public Content Access* feature (needs App Review) |
+
+If the Page sits in a business portfolio, the token also needs `business_management`, or the
+Page won't appear when you generate the token.
 
 Request nothing else: no messaging permissions are needed, and least privilege limits what
 a leaked token could do.
@@ -203,3 +206,32 @@ Mac is awake.
 `scheduler.cron`; any host that can run a command works (cron, systemd, a GitHub Actions
 `schedule:` workflow in a *private* ops repo with the brand folder checked out). Jobs are
 lock-protected, so overlapping schedules are safe.
+
+## 10. Reference scan (harvest)
+
+`instagram --brand <slug> harvest` downloads recent posts from other professional accounts
+(Business Discovery) and top posts for hashtags (Hashtag Search) into
+`<brand-path>/references/`, for the `reference-scan` skill. It is read-only and works while
+`enabled: false`, but it needs `api.login_type: facebook` and a token with the read
+permissions from §3: `instagram_basic`, `instagram_manage_insights`, `pages_show_list`,
+`pages_read_engagement`, plus `business_management` and `ads_read` if the Page sits in a
+business portfolio. Hashtags additionally need the *Instagram Public Content Access*
+feature (App Review), so start with accounts only. Put the lists in the brand's config, never here:
+
+```yaml
+api:
+  login_type: facebook
+research:
+  accounts: [account_a, account_b, account_c]
+  shortlists:
+    core: [account_a, account_b]
+  hashtags: []
+```
+
+```bash
+instagram --brand <slug> harvest --shortlist core   # new posts only; prints a source table
+instagram --brand <slug> references --unanalyzed    # ranked by engagement vs. the account's median
+```
+
+Accounts reported `unreadable` are personal accounts (the API can't read them) or misspelled
+usernames. Hashtag lookups share the 30-unique-per-7-days budget with opportunity monitoring.

@@ -13,8 +13,8 @@ specialists). Everything runs inside a Claude Code session; nothing runs on a se
 | Layer | Where | What it does |
 |---|---|---|
 | Harness rules | `CLAUDE.md` | Pipeline order, the human approval gate, where brand data lives |
-| Skills (workflows) | `.claude/skills/*/SKILL.md` | `brand-onboarding`, `design-system-teardown`, `design-system-ideation`, `social-trend-scan`, `social-content-build`, `social-content-remix`, `brand-drift-audit`, `inbox-drain` |
-| Agents (specialists) | `.claude/agents/*.md` | `trend-researcher`, `topic-ideator`, `theme-synthesizer`, `caption-writer`, `hashtag-strategist`, `image-prompt-engineer`, `brand-consistency-reviewer` |
+| Skills (workflows) | `.claude/skills/*/SKILL.md` | `brand-onboarding`, `design-system-teardown`, `design-system-ideation`, `social-trend-scan`, `reference-scan`, `social-content-build`, `social-content-remix`, `brand-drift-audit`, `inbox-drain` |
+| Agents (specialists) | `.claude/agents/*.md` | `trend-researcher`, `topic-ideator`, `reference-analyst`, `theme-synthesizer`, `caption-writer`, `hashtag-strategist`, `image-prompt-engineer`, `brand-consistency-reviewer` |
 | Brand schema | `brands/_template/` | `social-content-system.md` (audience, voice, pillars, mode, channels, format rules, no-go list) and `visual-design-system.md` (palette, type, logo, imagery, `## Rendering` method) |
 | Image rendering | `scripts/render_text_card.py` | Pillow renderer for flat-background text cards (1080x1350 PNG by default), used when a brand declares `Rendering → Method: direct` |
 
@@ -24,6 +24,8 @@ specialists). Everything runs inside a Claude Code session; nothing runs on a se
 brand-onboarding  →  social-trend-scan  →  HUMAN APPROVAL GATE  →  social-content-build
  (once per brand)     (idea board)          (pick clusters)         (captions, hashtags,
                                                                      image prompts/renders)
+reference-scan        — Stage 2 from real posts: harvest (API) → reference-analyst → numbered
+                        post plan → same gate (pick post numbers) → social-content-build
 social-content-remix  — ad-hoc path: reference post in, on-brand post out (no gate)
 inbox-drain           — processes phone captures from the private content-inbox repo via remix
 brand-drift-audit     — compares remix history to brand files, proposes (never applies) edits

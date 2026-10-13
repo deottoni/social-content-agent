@@ -1,7 +1,9 @@
 # Reference scan — design plan
 
-Status: **planned, not built** (2026-09-28). Build on top of the `instagram_os/` branch; it
-reuses its API client, brand config, and CLI.
+Status: **built** (2026-09-30): harvester + `harvest`/`references` CLI (`instagram_os/research.py`,
+tests in `tests/test_research.py`), `reference-analyst` agent, `theme-synthesizer` post-plan mode,
+`reference-scan` skill, and the reference-plan path in `social-content-build`. Not yet built: the
+weekly `harvest` cron entry (component 7). It reuses the `instagram_os/` API client, brand config, and CLI.
 
 ## Why
 
@@ -43,6 +45,8 @@ social-content-build <slug> <post numbers>  (existing skill, extended)
    - **Deduplication:** by media id. A post harvested once is never downloaded again.
    - **Ranking:** each post's engagement against its own account's median, so posts that beat their account's usual numbers rise to the top.
    - **Connection:** needs `api.login_type: facebook`, meaning a Facebook Page linked to the IG account. Works even while publishing is `enabled: false`.
+   - **Index:** `<brand-path>/references/index.json` records every harvested media id (the dedup key) and whether `reference-analyst` has read it (`analyzed_at`). `instagram references --unanalyzed` lists what's new; `--mark-analyzed` updates it.
+   - **Fallbacks:** if Business Discovery rejects the nested `children` field, the harvest retries with cover images only. An unreadable account (personal, wrong username) is reported and skipped; a rate limit stops the run and keeps what was already saved.
 2. **Brand config** (`<brand-path>/instagram/config.yaml` → `research:`):
    - `accounts`
    - named `shortlists` (e.g. `core: [a, b]`)
@@ -53,7 +57,7 @@ social-content-build <slug> <post numbers>  (existing skill, extended)
 
    The lists are brand data, so they live in the brand folder. The template in this repo stays empty.
 3. **`reference-analyst` agent** (new).
-   - Reads a batch of reference folders.
+   - Reads a batch of reference folders, plus the brand's `<brand-path>/references/notes.md` (per-account take/reject calls; template in `brands/_template/references/notes.md`).
    - Returns structured notes per post. It must never reproduce a post's copy verbatim.
    - Batches keep dozens of images out of the main session's context.
 4. **`theme-synthesizer`, post-plan mode.** Same agent, extra output. Under each cluster it lists concrete proposals, numbered across the whole plan:
